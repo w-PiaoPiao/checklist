@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>收文件 Checklist</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --primary: #4A90D9;
+  --bg: #f0f2f5;
+  --card: #fff;
+  --border: #e0e0e0;
+  --text: #333;
+  --text-secondary: #888;
+  --s-received: #27ae60;
+  --s-issue: #e67e22;
+  --s-unpaid: #e74c3c;
+  --s-exempt: #3498db;
+  --radius: 8px;
+  --shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+#app { max-width: 1200px; margin: 0 auto; padding: 16px; }
+
+/* header */
+header { background: var(--card); border-radius: var(--radius); padding: 16px 20px; box-shadow: var(--shadow); margin-bottom: 16px; }
+header h1 { font-size: 20px; color: var(--primary); margin-bottom: 12px; }
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+#btnNewTask { background: var(--primary); color: #fff; border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+#btnNewTask:hover { opacity: 0.9; }
+
+/* task tabs */
+.task-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 12px; }
+.task-tab { padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; border: 1px solid var(--border); background: var(--card); color: var(--text); display: flex; align-items: center; gap: 6px; }
+.task-tab:hover { border-color: var(--primary); }
+.task-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.task-tab .del-btn { cursor: pointer; opacity: 0.5; font-size: 14px; line-height: 1; }
+.task-tab .del-btn:hover { opacity: 1; }
+.task-tab.active .del-btn { color: #fff; }
+.task-tab .archive-badge { font-size: 11px; background: rgba(255,255,255,0.3); padding: 0 5px; border-radius: 3px; }
+
+/* checklist */
+#checklistContainer { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.task-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
+.task-header h2 { font-size: 16px; }
+.task-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.task-actions button { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; }
+.task-actions button:hover { border-color: var(--primary); color: var(--primary); }
+.task-actions .archive-btn:hover { color: #e67e22; border-color: #e67e22; }
+.task-actions .delete-btn:hover { color: #e74c3c; border-color: #e74c3c; }
+.task-actions .rename-btn:hover { color: var(--primary); border-color: var(--primary); }
+
+/* group section */
+.group-section { padding: 12px 20px; }
+.group-title { font-size: 14px; font-weight: 600; padding: 8px 0; display: flex; align-items: center; gap: 12px; }
+.group-title .count { font-weight: 400; color: var(--text-secondary); font-size: 12px; }
+.bulk-btn { padding: 3px 10px; border-radius: 4px; border: 1px solid var(--s-exempt); background: #eafaf1; color: var(--s-exempt); cursor: pointer; font-size: 12px; }
+.bulk-btn:hover { background: var(--s-exempt); color: #fff; }
+
+/* table */
+.checklist-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.checklist-table th { background: #f8f9fa; padding: 8px 6px; text-align: left; font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid var(--border); white-space: nowrap; }
+.checklist-table td { padding: 6px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+.checklist-table tr:hover td { background: inherit; }
+tr.row-s-received:hover td { background: rgba(39, 174, 96, 0.15); }
+tr.row-s-issue:hover td { background: rgba(230, 126, 34, 0.15); }
+tr.row-s-unpaid:hover td { background: rgba(231, 76, 60, 0.15); }
+tr.row-s-exempt:hover td { background: rgba(52, 152, 219, 0.15); }
+tr:not([class*="row-s-"]):hover td { background: #f0f1f3; }
+.col-idx { width: 36px; text-align: center; color: var(--text-secondary); }
+.col-name { min-width: 140px; }
+.col-status { white-space: nowrap; }
+.col-time { width: 105px; color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
+.col-note { width: 140px; max-width: 140px; font-size: 12px; }
+.note-display { cursor: default; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; display: inline-block; vertical-align: middle; padding: 1px 4px; border-radius: 3px; min-height: 20px; line-height: 20px; }
+.note-display:hover { background: #f0f2f5; }
+.note-input { width: 130px; font-size: 12px; padding: 1px 4px; border: 1px solid var(--primary); border-radius: 3px; outline: none; }
+
+.status-btn { display: inline-block; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; color: var(--text-secondary); transition: all 0.15s; text-align: center; min-width: 72px; }
+.status-btn:hover { border-color: #999; }
+.status-btn.active-s-received { background: var(--s-received); color: #fff; border-color: var(--s-received); }
+.status-btn.active-s-issue { background: var(--s-issue); color: #fff; border-color: var(--s-issue); }
+.status-btn.active-s-unpaid { background: var(--s-unpaid); color: #fff; border-color: var(--s-unpaid); }
+.status-btn.active-s-exempt { background: var(--s-exempt); color: #fff; border-color: var(--s-exempt); }
+.status-btn + .status-btn { margin-left: 2px; }
+
+/* row status tint — matches button colors */
+tr.row-s-received { background: rgba(39, 174, 96, 0.08); }
+tr.row-s-received .col-name { background: rgba(39, 174, 96, 0.18); font-weight: 600; }
+tr.row-s-issue { background: rgba(230, 126, 34, 0.08); }
+tr.row-s-issue .col-name { background: rgba(230, 126, 34, 0.18); font-weight: 600; }
+tr.row-s-unpaid { background: rgba(231, 76, 60, 0.08); }
+tr.row-s-unpaid .col-name { background: rgba(231, 76, 60, 0.18); font-weight: 600; }
+tr.row-s-exempt { background: rgba(52, 152, 219, 0.08); }
+tr.row-s-exempt .col-name { background: rgba(52, 152, 219, 0.18); font-weight: 600; }
+
+/* collapsed group */
+.group-section.collapsed .checklist-table { display: none; }
+.bulk-btn.is-exempt { background: #fff0f0; border-color: #e74c3c; color: #e74c3c; }
+.bulk-btn.is-exempt:hover { background: #e74c3c; color: #fff; }
+
+/* archive area */
+#archiveArea { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); margin-top: 16px; overflow: hidden; }
+.archive-header { padding: 14px 20px; cursor: pointer; display: flex; align-items: center; gap: 8px; user-select: none; }
+.archive-header:hover { background: #fafbfc; }
+.archive-header h3 { font-size: 15px; flex: 1; }
+.archive-header .arrow { transition: transform 0.2s; font-size: 12px; }
+.archive-header .arrow.open { transform: rotate(90deg); }
+.archive-count { font-size: 12px; color: var(--text-secondary); background: #f0f2f5; padding: 1px 8px; border-radius: 10px; }
+.archive-body { border-top: 1px solid var(--border); }
+.archive-body.hidden { display: none; }
+.archive-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; border-bottom: 1px solid #f0f0f0; }
+.archive-item:hover { background: #fafbfc; }
+.archive-item-info { display: flex; align-items: center; gap: 12px; }
+.archive-item-name { font-size: 14px; }
+.archive-item-date { font-size: 12px; color: var(--text-secondary); }
+.archive-item-actions { display: flex; gap: 8px; }
+.archive-item-actions button { padding: 3px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; }
+.archive-item-actions .unarchive-btn:hover { border-color: var(--primary); color: var(--primary); }
+.archive-item-actions .delete-btn:hover { border-color: #e74c3c; color: #e74c3c; }
+
+/* sticky task card */
+#taskCard { position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 50; background: var(--primary); color: #fff; padding: 20px 24px; border-radius: 0 12px 12px 0; font-size: 22px; font-weight: 700; box-shadow: 2px 2px 12px rgba(0,0,0,0.2); writing-mode: vertical-lr; letter-spacing: 4px; max-height: 60vh; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: opacity 0.2s; }
+#taskCard:hover { opacity: 0.85; }
+#taskDropdown { position: fixed; left: 68px; top: 50%; transform: translateY(-50%); z-index: 51; background: var(--card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); padding: 6px 0; min-width: 160px; font-size: 14px; display: none; }
+#taskDropdown.show { display: block; }
+#taskDropdown .td-item { padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--text); white-space: nowrap; }
+#taskDropdown .td-item:hover { background: #f0f2f5; }
+#taskDropdown .td-item.active { color: var(--primary); font-weight: 600; background: #eaf4fc; }
+
+/* empty state */
+.empty-state { padding: 40px 20px; text-align: center; color: var(--text-secondary); }
+.empty-state p { margin-bottom: 12px; }
+
+/* modal */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; justify-content: center; align-items: center; }
+.modal-overlay.show { display: flex; }
+.modal { background: var(--card); border-radius: var(--radius); padding: 24px; width: 360px; max-width: 90vw; box-shadow: 0 8px 30px rgba(0,0,0,0.15); }
+.modal h3 { font-size: 16px; margin-bottom: 16px; }
+.modal input[type="text"] { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; margin-bottom: 16px; }
+.modal input[type="text"]:focus { outline: none; border-color: var(--primary); }
+.modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+.modal-btns button { padding: 6px 16px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 13px; }
+.modal-btns .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.modal-btns .btn-primary:hover { opacity: 0.9; }
+.modal-btns .btn-danger { background: #e74c3c; color: #fff; border-color: #e74c3c; }
+
+/* confirm dialog */
+#confirmDialog .modal { width: 320px; }
+#confirmDialog .modal p { margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
+
+/* notification */
+.notification { position: fixed; bottom: 20px; right: 20px; background: #333; color: #fff; padding: 10px 20px; border-radius: 6px; font-size: 13px; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.notification.show { opacity: 1; }
+
+/* misc */
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="taskCard"></div>
+<div id="taskDropdown"></div>
+<div id="app">
+  <header>
+    <h1>收文件 Checklist</h1>
+    <div class="toolbar">
+      <button id="btnNewTask">+ 新建任务</button>
+      <button id="btnExport" style="padding:6px 12px;border-radius:4px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:13px;">导出数据</button>
+      <button id="btnImport" style="padding:6px 12px;border-radius:4px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:13px;">导入数据</button>
+      <input type="file" id="importFile" accept=".json" class="hidden">
+    </div>
+    <div class="task-tabs" id="taskTabs"></div>
+  </header>
+
+  <div id="checklistContainer"></div>
+
+  <div id="archiveArea">
+    <div class="archive-header" id="archiveToggle">
+      <span class="arrow" id="archiveArrow">&#9654;</span>
+      <h3>归档区</h3>
+      <span class="archive-count" id="archiveCount">0</span>
+    </div>
+    <div class="archive-body hidden" id="archiveBody"></div>
+  </div>
+</div>
+
+<!-- new task modal -->
+<div class="modal-overlay" id="newTaskModal">
+  <div class="modal">
+    <h3>新建收取任务</h3>
+    <input type="text" id="newTaskName" placeholder="输入任务名称..." autofocus>
+    <div class="modal-btns">
+      <button id="btnCancelNew">取消</button>
+      <button id="btnConfirmNew" class="btn-primary">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- confirm dialog -->
+<div class="modal-overlay" id="confirmDialog">
+  <div class="modal">
+    <h3 id="confirmTitle">确认</h3>
+    <p id="confirmMessage"></p>
+    <div class="modal-btns">
+      <button id="confirmCancel">取消</button>
+      <button id="confirmOk" class="btn-danger">确认</button>
+    </div>
+  </div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<script>
+// ===== Unit data =====
+const UNIT_NAMES = [
+  "成都市卫生健康委员会","成都市卫生计生监督执法支队","成都市疾病预防控制中心",
+  "成都市卫生健康信息中心","成都市血液中心","成都市卫生健康人才交流中心",
+  "成都市急救指挥中心","成都市第一人民医院","成都市第二人民医院",
+  "成都市第三人民医院","成都市第四人民医院","成都市第五人民医院",
+  "成都市第六人民医院","成都市第七人民医院","成都市妇女儿童中心医院",
+  "成都市公共卫生临床医疗中心","成都市第八人民医院","成都市中草药研究所",
+  "成都市卫生健康宣传中心","成都市计划生育协会",
+  "四川天府新区","成都东部新区","成都高新区",
+  "锦江区","青羊区","金牛区","武侯区","成华区",
+  "龙泉驿区","青白江区","新都区","温江区","双流区",
+  "郫都区","新津区","简阳市","都江堰市","彭州市",
+  "邛崃市","崇州市","金堂县","大邑县","蒲江县"
+];
+const GROUP_BREAK = 20; // first 20 are 直属单位
+
+// ===== IndexedDB =====
+const DB_NAME = 'DocChecklistDB';
+const DB_VERSION = 1;
+const STORE = 'tasks';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) {
+        db.createObjectStore(STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getAllTasks() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function putTask(task) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const req = tx.objectStore(STORE).put(task);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function deleteTaskFromDB(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const req = tx.objectStore(STORE).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ===== State =====
+let tasks = [];
+let currentTaskId = null;
+let confirmCallback = null;
+
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+function makeDefaultItems() {
+  return UNIT_NAMES.map((name, i) => ({
+    id: i,
+    name,
+    group: i < GROUP_BREAK ? '直属单位' : '区市县',
+    status: '',
+    updatedAt: null,
+    note: ''
+  }));
+}
+
+function createTask(name) {
+  return {
+    id: genId(),
+    name: name || '未命名任务',
+    createdAt: Date.now(),
+    archived: false,
+    items: makeDefaultItems()
+  };
+}
+
+// ===== Render =====
+function render() {
+  renderCard();
+  renderTabs();
+  renderChecklist();
+  renderArchive();
+}
+
+function renderCard() {
+  const card = document.getElementById('taskCard');
+  const dd = document.getElementById('taskDropdown');
+  const task = tasks.find(t => t.id === currentTaskId);
+  card.textContent = task ? task.name : '无任务';
+  card.title = task ? task.name : '';
+
+  const active = tasks.filter(t => !t.archived);
+  dd.innerHTML = active.map(t =>
+    `<div class="td-item${t.id === currentTaskId ? ' active' : ''}" data-id="${t.id}">${escHtml(t.name)}</div>`
+  ).join('') || '<div class="td-item" style="color:var(--text-secondary);cursor:default;">暂无任务</div>';
+}
+
+function toggleTaskDropdown(show) {
+  document.getElementById('taskDropdown').classList.toggle('show', show);
+}
+
+document.getElementById('taskCard').addEventListener('click', () => {
+  const dd = document.getElementById('taskDropdown');
+  toggleTaskDropdown(!dd.classList.contains('show'));
+});
+
+document.getElementById('taskDropdown').addEventListener('click', async (e) => {
+  const item = e.target.closest('.td-item');
+  if (!item || !item.dataset.id) return;
+  toggleTaskDropdown(false);
+  if (item.dataset.id === currentTaskId) return;
+  currentTaskId = item.dataset.id;
+  render();
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#taskCard') && !e.target.closest('#taskDropdown')) {
+    toggleTaskDropdown(false);
+  }
+});
+
+function renderTabs() {
+  const container = document.getElementById('taskTabs');
+  const active = tasks.filter(t => !t.archived);
+  if (active.length === 0) {
+    container.innerHTML = '<span style="color:var(--text-secondary);font-size:13px;">暂无活跃任务</span>';
+    return;
+  }
+  container.innerHTML = active.map(t => `
+    <div class="task-tab${t.id === currentTaskId ? ' active' : ''}" data-id="${t.id}">
+      <span class="tab-name">${escHtml(t.name)}</span>
+      <span class="del-btn" data-action="delete-task" data-id="${t.id}" title="删除任务">&times;</span>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.task-tab').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.dataset.action === 'delete-task') return;
+      switchTask(el.dataset.id);
+    });
+  });
+  container.querySelectorAll('[data-action="delete-task"]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = el.dataset.id;
+      showConfirm('删除任务', `确定要彻底删除任务「${tasks.find(t => t.id === id)?.name || ''}」吗？此操作不可恢复。`, () => doDeleteTask(id));
+    });
+  });
+}
+
+function renderChecklist() {
+  const container = document.getElementById('checklistContainer');
+  const task = tasks.find(t => t.id === currentTaskId);
+  if (!task) {
+    container.innerHTML = '<div class="empty-state"><p>请选择一个任务</p></div>';
+    return;
+  }
+  const groups = ['直属单位', '区市县'];
+  let html = `
+    <div class="task-header">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <h2 id="taskNameDisplay">${escHtml(task.name)}</h2>
+        <input type="text" id="taskNameInput" class="hidden" style="flex:1;padding:4px 8px;border:1px solid var(--primary);border-radius:4px;font-size:14px;">
+      </div>
+      <div class="task-actions">
+        <button class="rename-btn" id="btnRenameTask">重命名</button>
+        <button class="archive-btn" id="btnArchiveTask">归档</button>
+        <button class="delete-btn" id="btnDeleteTask">删除任务</button>
+      </div>
+    </div>
+  `;
+  groups.forEach(g => {
+    const items = task.items.filter(i => i.group === g)
+      .sort((a, b) => {
+        if (a.status === '不需要缴' && b.status !== '不需要缴') return 1;
+        if (a.status !== '不需要缴' && b.status === '不需要缴') return -1;
+        return a.id - b.id;
+      });
+    const allExempt = items.length > 0 && items.every(i => i.status === '不需要缴');
+    const btnText = allExempt ? '全部设为需要缴' : '全部设为不需要缴';
+    html += `
+      <div class="group-section${allExempt ? ' collapsed' : ''}">
+        <div class="group-title">
+          <span>${g}</span>
+          <span class="count">${items.length} 个单位</span>
+          <button class="bulk-btn${allExempt ? ' is-exempt' : ''}" data-group="${g}">${btnText}</button>
+        </div>
+        <table class="checklist-table">
+          <thead><tr>
+            <th class="col-idx">#</th>
+            <th class="col-name">单位名称</th>
+            <th class="col-status" colspan="4">状态</th>
+            <th class="col-time">更新时间</th>
+            <th class="col-note">备注</th>
+          </tr></thead>
+          <tbody>
+            ${items.map(item => renderRow(item, task)).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+
+  // bind bulk buttons
+  container.querySelectorAll('.bulk-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const group = btn.dataset.group;
+      doBulkExempt(group);
+    });
+  });
+
+  // bind status buttons
+  container.querySelectorAll('.status-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const itemId = parseInt(btn.dataset.itemId);
+      const status = btn.dataset.status;
+      setItemStatus(currentTaskId, itemId, status);
+    });
+  });
+
+  // bind note dblclick
+  container.querySelectorAll('.note-display').forEach(el => {
+    el.addEventListener('dblclick', () => {
+      const td = el.parentElement;
+      const input = td.querySelector('.note-input');
+      if (!input) return;
+      el.classList.add('hidden');
+      input.classList.remove('hidden');
+      input.focus();
+      input.select();
+    });
+  });
+  container.querySelectorAll('.note-input').forEach(input => {
+    const save = async () => {
+      const td = input.parentElement;
+      const display = td.querySelector('.note-display');
+      const itemId = parseInt(input.dataset.itemId);
+      const task = tasks.find(t => t.id === currentTaskId);
+      const item = task?.items.find(i => i.id === itemId);
+      if (!item) return;
+      item.note = input.value;
+      await putTask(task);
+      display.textContent = input.value || '';
+      display.title = input.value || '';
+      display.classList.remove('hidden');
+      input.classList.add('hidden');
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { input.blur(); }
+      if (e.key === 'Escape') {
+        const td = input.parentElement;
+        const display = td.querySelector('.note-display');
+        input.value = display.title || '';
+        input.classList.add('hidden');
+        display.classList.remove('hidden');
+      }
+    });
+  });
+
+  // bind task actions
+  document.getElementById('btnArchiveTask')?.addEventListener('click', () => doArchiveTask());
+  document.getElementById('btnDeleteTask')?.addEventListener('click', () => {
+    const task = tasks.find(t => t.id === currentTaskId);
+    showConfirm('删除任务', `确定要彻底删除任务「${task?.name || ''}」吗？所有记录将不可恢复。`, () => doDeleteTask(currentTaskId));
+  });
+  bindRename();
+}
+
+function bindRename() {
+  const display = document.getElementById('taskNameDisplay');
+  const input = document.getElementById('taskNameInput');
+  const btn = document.getElementById('btnRenameTask');
+  if (!display || !input || !btn) return;
+
+  const startRename = () => {
+    display.classList.add('hidden');
+    input.classList.remove('hidden');
+    input.value = display.textContent;
+    input.focus();
+    input.select();
+    btn.textContent = '保存';
+  };
+
+  const finishRename = async () => {
+    const task = tasks.find(t => t.id === currentTaskId);
+    if (!task) return;
+    const newName = input.value.trim() || task.name;
+    task.name = newName;
+    await putTask(task);
+    display.textContent = newName;
+    display.classList.remove('hidden');
+    input.classList.add('hidden');
+    btn.textContent = '重命名';
+    renderTabs();
+  };
+
+  btn.addEventListener('click', () => {
+    if (btn.textContent === '保存') { finishRename(); return; }
+    startRename();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') finishRename();
+    if (e.key === 'Escape') {
+      display.classList.remove('hidden');
+      input.classList.add('hidden');
+      btn.textContent = '重命名';
+    }
+  });
+  input.addEventListener('blur', () => {
+    if (!input.classList.contains('hidden')) finishRename();
+  });
+}
+
+function renderRow(item, task) {
+  const statuses = [
+    { key: '已收', cls: 's-received' },
+    { key: '已反馈问题', cls: 's-issue' },
+    { key: '未缴', cls: 's-unpaid' },
+    { key: '不需要缴', cls: 's-exempt' }
+  ];
+  const btns = statuses.map(s => `
+    <span class="status-btn${item.status === s.key ? ' active-' + s.cls : ''}"
+          data-item-id="${item.id}" data-status="${s.key}">${s.key}</span>
+  `).join('');
+  const time = item.updatedAt ? fmtTime(item.updatedAt) : '';
+  const rowCls = item.status ? `row-${statuses.find(s => s.key === item.status)?.cls || ''}` : '';
+  const noteId = `note-${item.id}`;
+  return `<tr class="${rowCls}">
+    <td class="col-idx">${item.id + 1}</td>
+    <td class="col-name">${escHtml(item.name)}</td>
+    <td class="col-status" colspan="4">${btns}</td>
+    <td class="col-time">${time}</td>
+    <td class="col-note">
+      <span class="note-display" title="${escHtml(item.note || '')}" data-item-id="${item.id}">${escHtml(item.note || '')}</span>
+      <input type="text" class="note-input hidden" data-item-id="${item.id}" value="${escHtml(item.note || '')}">
+    </td>
+  </tr>`;
+}
+
+function renderArchive() {
+  const archived = tasks.filter(t => t.archived);
+  document.getElementById('archiveCount').textContent = archived.length;
+  const body = document.getElementById('archiveBody');
+  if (archived.length === 0) {
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">暂无已归档任务</div>';
+    return;
+  }
+  body.innerHTML = archived.map(t => `
+    <div class="archive-item">
+      <div class="archive-item-info">
+        <span class="archive-item-name">${escHtml(t.name)}</span>
+        <span class="archive-item-date">${fmtTime(t.createdAt)}</span>
+      </div>
+      <div class="archive-item-actions">
+        <button class="unarchive-btn" data-id="${t.id}">取消归档</button>
+        <button class="delete-btn" data-id="${t.id}">删除</button>
+      </div>
+    </div>
+  `).join('');
+
+  body.querySelectorAll('.unarchive-btn').forEach(btn => {
+    btn.addEventListener('click', () => doUnarchiveTask(btn.dataset.id));
+  });
+  body.querySelectorAll('.archive-item .delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const t = tasks.find(x => x.id === id);
+      showConfirm('删除任务', `确定要彻底删除归档任务「${t?.name || ''}」吗？`, () => doDeleteTask(id));
+    });
+  });
+}
+
+// ===== Actions =====
+async function switchTask(id) {
+  currentTaskId = id;
+  render();
+}
+
+async function setItemStatus(taskId, itemId, status) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const item = task.items.find(i => i.id === itemId);
+  if (!item) return;
+  if (item.status === status) {
+    item.status = '';
+    item.updatedAt = null;
+  } else {
+    item.status = status;
+    item.updatedAt = Date.now();
+  }
+  await putTask(task);
+  render();
+}
+
+async function doBulkExempt(group) {
+  const task = tasks.find(t => t.id === currentTaskId);
+  if (!task) return;
+  const groupItems = task.items.filter(i => i.group === group);
+  const allExempt = groupItems.every(i => i.status === '不需要缴');
+  const newStatus = allExempt ? '' : '不需要缴';
+  const now = Date.now();
+  task.items.forEach(i => {
+    if (i.group === group) {
+      i.status = newStatus;
+      i.updatedAt = newStatus ? now : null;
+    }
+  });
+  await putTask(task);
+  showNotify(allExempt ? `已取消全部${group}的「不需要缴」` : `已将全部${group}设为「不需要缴」`);
+  render();
+}
+
+async function doArchiveTask() {
+  const task = tasks.find(t => t.id === currentTaskId);
+  if (!task) return;
+  task.archived = true;
+  await putTask(task);
+  // switch to next available task
+  const next = tasks.find(t => !t.archived && t.id !== currentTaskId);
+  currentTaskId = next ? next.id : null;
+  render();
+}
+
+async function doUnarchiveTask(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  task.archived = false;
+  await putTask(task);
+  currentTaskId = id;
+  render();
+}
+
+async function doDeleteTask(id) {
+  const idx = tasks.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  tasks.splice(idx, 1);
+  await deleteTaskFromDB(id);
+  if (currentTaskId === id) {
+    const next = tasks.find(t => !t.archived);
+    currentTaskId = next ? next.id : null;
+  }
+  render();
+  showNotify('任务已删除');
+}
+
+async function doNewTask(name) {
+  const task = createTask(name.trim() || '未命名任务');
+  tasks.push(task);
+  await putTask(task);
+  currentTaskId = task.id;
+  render();
+}
+
+// ===== Helpers =====
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function fmtTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function showNotify(msg) {
+  const el = document.getElementById('notification');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function showConfirm(title, message, onConfirm) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMessage').textContent = message;
+  document.getElementById('confirmDialog').classList.add('show');
+  confirmCallback = onConfirm;
+}
+
+// ===== Modal handling =====
+document.getElementById('btnNewTask').addEventListener('click', () => {
+  document.getElementById('newTaskName').value = '';
+  document.getElementById('newTaskModal').classList.add('show');
+  document.getElementById('newTaskName').focus();
+});
+document.getElementById('btnCancelNew').addEventListener('click', () => {
+  document.getElementById('newTaskModal').classList.remove('show');
+});
+document.getElementById('btnConfirmNew').addEventListener('click', () => {
+  const name = document.getElementById('newTaskName').value.trim() || '未命名任务';
+  document.getElementById('newTaskModal').classList.remove('show');
+  doNewTask(name);
+});
+document.getElementById('newTaskName').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('btnConfirmNew').click();
+});
+
+document.getElementById('confirmCancel').addEventListener('click', () => {
+  document.getElementById('confirmDialog').classList.remove('show');
+  confirmCallback = null;
+});
+document.getElementById('confirmOk').addEventListener('click', () => {
+  document.getElementById('confirmDialog').classList.remove('show');
+  if (confirmCallback) { confirmCallback(); confirmCallback = null; }
+});
+
+// import / export
+document.getElementById('btnExport').addEventListener('click', async () => {
+  const all = await getAllTasks();
+  const blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `收文件数据_${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showNotify('数据已导出');
+});
+
+document.getElementById('btnImport').addEventListener('click', () => {
+  document.getElementById('importFile').click();
+});
+
+document.getElementById('importFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!Array.isArray(data)) throw new Error('格式无效');
+    for (const task of data) {
+      if (!task.id || !task.name || !Array.isArray(task.items)) throw new Error('数据字段不完整');
+      await putTask(task);
+    }
+    tasks = await getAllTasks();
+    const firstActive = tasks.find(t => !t.archived);
+    currentTaskId = firstActive ? firstActive.id : null;
+    render();
+    showNotify(`已导入 ${data.length} 个任务`);
+  } catch (err) {
+    showNotify('导入失败：' + err.message);
+  }
+  e.target.value = '';
+});
+
+// archive toggle
+document.getElementById('archiveToggle').addEventListener('click', () => {
+  const body = document.getElementById('archiveBody');
+  const arrow = document.getElementById('archiveArrow');
+  body.classList.toggle('hidden');
+  arrow.classList.toggle('open');
+});
+
+// ===== Init =====
+async function init() {
+  tasks = await getAllTasks();
+  if (tasks.length === 0) {
+    const defaultTask = createTask('默认任务');
+    tasks.push(defaultTask);
+    await putTask(defaultTask);
+  }
+  const firstActive = tasks.find(t => !t.archived);
+  currentTaskId = firstActive ? firstActive.id : null;
+  render();
+}
+init().catch(err => {
+  console.error(err);
+  document.getElementById('checklistContainer').innerHTML =
+    '<div class="empty-state"><p>数据加载失败，请确认浏览器支持 IndexedDB。</p></div>';
+});
+</script>
+</body>
+</html>
