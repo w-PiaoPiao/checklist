@@ -30,6 +30,30 @@ header h1 { font-size: 20px; color: var(--primary); margin-bottom: 12px; }
 #btnNewTask { background: var(--primary); color: #fff; border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; }
 #btnNewTask:hover { opacity: 0.9; }
 
+/* multi receive row tints */
+tr.row-multi-full { background: rgba(39,174,96,0.18); }
+tr.row-multi-full .col-name { background: rgba(39,174,96,0.28); font-weight: 600; }
+tr.row-multi-partial { background: repeating-linear-gradient(-45deg, transparent, transparent 5px, rgba(39,174,96,0.08) 5px, rgba(39,174,96,0.08) 10px); }
+tr.row-multi-partial .col-name { background: rgba(39,174,96,0.18); font-weight: 600; }
+tr.row-multi-partial:hover td { background: rgba(39,174,96,0.16); }
+tr.row-multi-full:hover td { background: rgba(39,174,96,0.2); }
+
+/* rec header button in status column */
+.rec-header-btn { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; line-height: 1.4; color: var(--text-secondary); margin-left: 4px; vertical-align: middle; }
+.rec-header-btn:hover { border-color: var(--s-received); color: var(--s-received); }
+
+/* multi label button */
+.multi-label-btn { display: inline-flex; align-items: center; justify-content: center; width: 52px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; color: var(--text-secondary); transition: all 0.15s; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.multi-label-btn:hover { border-color: #999; }
+.multi-label-btn.active { background: var(--s-received); color: #fff; border-color: var(--s-received); }
+.multi-label-btn + .multi-label-btn { margin-left: 2px; }
+
+/* multi receive modal inputs */
+.multi-input-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.multi-input-list input { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; }
+.multi-input-list input:focus { outline: none; border-color: var(--s-received); }
+.multi-input-hint { font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; }
+
 /* task tabs */
 .task-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 12px; }
 .task-tab { padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; border: 1px solid var(--border); background: var(--card); color: var(--text); display: flex; align-items: center; gap: 6px; }
@@ -63,8 +87,7 @@ header h1 { font-size: 20px; color: var(--primary); margin-bottom: 12px; }
 .checklist-table th { background: #f8f9fa; padding: 8px 6px; text-align: left; font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid var(--border); white-space: nowrap; }
 .checklist-table td { padding: 6px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
 .checklist-table tr:hover td { background: inherit; }
-tr.row-has-received:hover td { background: rgba(39,174,96,0.14); }
-tr.row-full-received:hover td { background: rgba(39,174,96,0.16); }
+
 tr.row-s-issue:hover td { background: rgba(230,126,34,0.15); }
 tr.row-s-unpaid:hover td { background: rgba(231,76,60,0.15); }
 tr.row-s-exempt:hover td { background: rgba(52,152,219,0.15); }
@@ -78,7 +101,7 @@ tr:not([class*="row-"]):hover td { background: #f0f1f3; }
 .note-display:hover { background: #f0f2f5; }
 .note-input { width: 130px; font-size: 12px; padding: 1px 4px; border: 1px solid var(--primary); border-radius: 3px; outline: none; }
 
-.status-btn { display: inline-flex; align-items: center; padding: 2px 5px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; color: var(--text-secondary); transition: all 0.15s; text-align: center; }
+.status-btn { display: inline-flex; align-items: center; justify-content: center; width: 52px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; color: var(--text-secondary); transition: all 0.15s; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
 .status-btn:hover { border-color: #999; }
 .status-btn.active-s-received { background: var(--s-received); color: #fff; border-color: var(--s-received); }
 .status-btn.active-s-issue { background: var(--s-issue); color: #fff; border-color: var(--s-issue); }
@@ -86,23 +109,10 @@ tr:not([class*="row-"]):hover td { background: #f0f1f3; }
 .status-btn.active-s-exempt { background: var(--s-exempt); color: #fff; border-color: var(--s-exempt); }
 .status-btn + .status-btn { margin-left: 2px; }
 
-/* received tags */
-.received-area { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; margin-right: 4px; }
-.received-tag { display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px; border-radius: 3px; font-size: 11px; background: rgba(39,174,96,0.12); border: 1px solid var(--s-received); color: #1a7a3a; cursor: default; }
-.received-tag .rm { cursor: pointer; font-size: 12px; line-height: 1; opacity: 0.5; margin-left: 1px; }
-.received-tag .rm:hover { opacity: 1; }
-.rec-input { width: 46px; font-size: 11px; padding: 1px 3px; border: 1px solid var(--s-received); border-radius: 3px; outline: none; }
-.rec-header-btn { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; line-height: 1; color: var(--text-secondary); margin-left: 2px; vertical-align: middle; }
-.rec-header-btn:hover { border-color: var(--s-received); color: var(--s-received); }
-.rec-header-input { width: 60px; font-size: 11px; padding: 1px 4px; border: 1px solid var(--s-received); border-radius: 3px; outline: none; vertical-align: middle; }
-.rm-label { cursor: pointer; opacity: 0.4; font-size: 11px; margin-left: 2px; line-height: 1; }
-.rm-label:hover { opacity: 1; }
+
 
 /* row status tints */
-tr.row-has-received { background: repeating-linear-gradient(-45deg, transparent, transparent 5px, rgba(39,174,96,0.06) 5px, rgba(39,174,96,0.06) 10px); }
-tr.row-has-received .col-name { background: rgba(39,174,96,0.18); font-weight: 600; }
-tr.row-full-received { background: rgba(39,174,96,0.08); }
-tr.row-full-received .col-name { background: rgba(39,174,96,0.2); font-weight: 600; }
+
 tr.row-s-issue { background: rgba(230,126,34,0.08); }
 tr.row-s-issue .col-name { background: rgba(230,126,34,0.18); font-weight: 600; }
 tr.row-s-unpaid { background: rgba(231,76,60,0.08); }
@@ -212,6 +222,25 @@ tr.row-s-exempt .col-name { background: rgba(52,152,219,0.18); font-weight: 600;
   </div>
 </div>
 
+<!-- multi receive modal -->
+<div class="modal-overlay" id="multiReceiveModal">
+  <div class="modal" style="width:380px;">
+    <h3>设置收多个标签</h3>
+    <p class="multi-input-hint">最多 5 个词语，清空词语 = 移除该标签。点击「收单个」恢复默认按钮。</p>
+    <div class="multi-input-list" id="multiInputList">
+      <input type="text" class="multi-input" maxlength="20" placeholder="词语 1">
+      <input type="text" class="multi-input" maxlength="20" placeholder="词语 2">
+      <input type="text" class="multi-input" maxlength="20" placeholder="词语 3">
+      <input type="text" class="multi-input" maxlength="20" placeholder="词语 4">
+      <input type="text" class="multi-input" maxlength="20" placeholder="词语 5">
+    </div>
+    <div class="modal-btns">
+      <button id="btnCancelMulti">取消</button>
+      <button id="btnConfirmMulti" class="btn-primary">确认</button>
+    </div>
+  </div>
+</div>
+
 <!-- confirm dialog -->
 <div class="modal-overlay" id="confirmDialog">
   <div class="modal">
@@ -308,7 +337,7 @@ function makeDefaultItems() {
     status: '',
     updatedAt: null,
     note: '',
-    receivedStatus: {}
+    multiStatus: {}
   }));
 }
 
@@ -318,6 +347,7 @@ function createTask(name) {
     name: name || '未命名任务',
     createdAt: Date.now(),
     archived: false,
+    receiveLabels: [],
     items: makeDefaultItems()
   };
 }
@@ -437,7 +467,7 @@ function renderChecklist() {
           <thead><tr>
             <th class="col-idx">#</th>
             <th class="col-name">单位名称</th>
-            <th class="col-status">状态 <span class="rec-header-btn" data-action="add-rec-header" title="新增已收描述">+</span><span class="rec-header-btn" data-action="rm-rec-header" title="移除已收描述">-</span></th>
+            <th class="col-status">状态 <span class="rec-header-btn" data-action="reset-to-single" title="恢复默认四个按钮">收单个</span><span class="rec-header-btn" data-action="open-multi-config" title="设置收多个标签">收多个</span></th>
             <th class="col-time">更新时间</th>
             <th class="col-note">备注</th>
           </tr></thead>
@@ -467,51 +497,12 @@ function renderChecklist() {
     });
   });
 
-  // bind header add/remove received
-  container.querySelector('[data-action="add-rec-header"]')?.addEventListener('click', () => {
-    const th = document.querySelector('.col-status');
-    const existing = th.querySelector('.rec-header-input');
-    if (existing) return;
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'rec-header-input';
-    input.placeholder = '描述';
-    th.appendChild(input);
-    input.focus();
-    let done = false;
-    const commit = () => {
-      if (done) return;
-      done = true;
-      if (input.value.trim()) addReceivedLabelToAll(input.value.trim());
-      else input.remove();
-    };
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') commit();
-      if (e.key === 'Escape') { done = true; input.remove(); }
-    });
-    input.addEventListener('blur', commit);
-  });
-  container.querySelector('[data-action="rm-rec-header"]')?.addEventListener('click', () => {
-    removeLastReceivedLabelFromAll();
-  });
-
-  // bind remove received label per item
-  container.querySelectorAll('[data-action="rm-rec"]').forEach(el => {
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const id = parseInt(el.dataset.id);
-      const label = el.dataset.label;
-      perItemRemoveReceivedLabel(currentTaskId, id, label);
-    });
-  });
-
-  // bind toggle received label per item
-  container.querySelectorAll('[data-action="toggle-rec"]').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target.closest('.rm-label')) return;
-      const id = parseInt(el.dataset.id);
-      const label = el.dataset.label;
-      toggleReceivedLabel(currentTaskId, id, label);
+  // bind multi label buttons
+  container.querySelectorAll('[data-action="toggle-multi"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.id);
+      const label = btn.dataset.label;
+      toggleMultiLabel(currentTaskId, id, label);
     });
   });
 
@@ -612,33 +603,41 @@ function bindRename() {
 function renderRow(item, task) {
   const time = item.updatedAt ? fmtTime(item.updatedAt) : '';
 
-  const labels = item.receivedStatus || {};
-  const labelBtns = Object.keys(labels).map(k =>
-    `<span class="status-btn${labels[k] ? ' active-s-received' : ''}" data-action="toggle-rec" data-id="${item.id}" data-label="${escHtml(k)}">${escHtml(k)}<span class="rm-label" data-action="rm-rec" data-id="${item.id}" data-label="${escHtml(k)}">✕</span></span>`
+  // 已收按钮（收单个）
+  const singleBtn = `<span class="status-btn${item.status === '已收' ? ' active-s-received' : ''}" data-action="set-status" data-id="${item.id}" data-status="已收" title="已收">已收</span>`;
+
+  // 收多个标签按钮组
+  const labels = (task.receiveLabels && task.receiveLabels.length) ? task.receiveLabels : [];
+  const ms = item.multiStatus || {};
+  const activeCount = labels.filter(l => ms[l]).length;
+  const multiBtns = labels.map(l =>
+    `<span class="multi-label-btn${ms[l] ? ' active' : ''}" data-action="toggle-multi" data-id="${item.id}" data-label="${escHtml(l)}" title="${escHtml(l)}">${escHtml(l)}</span>`
   ).join('');
 
-  const statusBtns = [
-    { key: '已收', cls: 's-received' },
+  // 其他状态按钮
+  const otherBtns = [
     { key: '已反馈', cls: 's-issue' },
     { key: '未交', cls: 's-unpaid' },
     { key: '不需要', cls: 's-exempt' }
   ].map(s =>
-    `<span class="status-btn${item.status === s.key ? ' active-' + s.cls : ''}" data-action="set-status" data-id="${item.id}" data-status="${s.key}">${s.key}</span>`
+    `<span class="status-btn${item.status === s.key ? ' active-' + s.cls : ''}" data-action="set-status" data-id="${item.id}" data-status="${s.key}" title="${s.key}">${s.key}</span>`
   ).join('');
 
-  const cnt = Object.keys(labels).filter(k => labels[k]).length;
+  // 行底纹：基于"收多个"的激活状态
   let rowCls = '';
   if (item.status === '已反馈') rowCls = 'row-s-issue';
   else if (item.status === '未交') rowCls = 'row-s-unpaid';
   else if (item.status === '不需要') rowCls = 'row-s-exempt';
-  else if (cnt > 0) rowCls = cnt < 5 ? 'row-has-received' : 'row-full-received';
+  else if (labels.length > 0) {
+    if (activeCount > 0 && activeCount < labels.length) rowCls = 'row-multi-partial';
+    else if (activeCount === labels.length) rowCls = 'row-multi-full';
+  }
 
   return `<tr class="${rowCls}">
     <td class="col-idx">${item.id + 1}</td>
     <td class="col-name">${escHtml(item.name)}</td>
     <td class="col-status">
-      ${labelBtns ? `<span class="received-area">${labelBtns}</span>` : ''}
-      ${statusBtns}
+      ${singleBtn}${multiBtns}${otherBtns}
     </td>
     <td class="col-time">${time}</td>
     <td class="col-note">
@@ -703,64 +702,96 @@ async function setItemStatus(taskId, itemId, status) {
   render();
 }
 
-async function addReceivedLabelToAll(label) {
+async function toggleMultiLabel(taskId, itemId, label) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const item = task.items.find(i => i.id === itemId);
+  if (!item) return;
+  const ms = item.multiStatus || {};
+  ms[label] = !ms[label];
+  item.multiStatus = ms;
+  item.updatedAt = Date.now();
+  await putTask(task);
+  render();
+}
+
+async function openMultiReceiveModal() {
   const task = tasks.find(t => t.id === currentTaskId);
   if (!task) return;
-  const allKeys = new Set();
-  task.items.forEach(i => { Object.keys(i.receivedStatus || {}).forEach(k => allKeys.add(k)); });
-  if (allKeys.has(label)) return;
-  task.items.forEach(item => {
-    const s = item.receivedStatus || {};
-    if (Object.keys(s).length < 5) {
-      s[label] = false;
-      item.receivedStatus = s;
+  if (!Array.isArray(task.receiveLabels)) {
+    task.receiveLabels = [];
+  }
+  showMultiReceiveModal();
+}
+
+async function resetToSingle() {
+  const task = tasks.find(t => t.id === currentTaskId);
+  if (!task) return;
+  task.receiveLabels = [];
+  for (const item of task.items) {
+    item.multiStatus = {};
+    if (!item.status) {
       item.updatedAt = Date.now();
     }
-  });
+  }
   await putTask(task);
   render();
+  showNotify('已恢复为默认四个状态按钮');
 }
 
-async function removeLastReceivedLabelFromAll() {
+function showMultiReceiveModal() {
   const task = tasks.find(t => t.id === currentTaskId);
   if (!task) return;
-  const allKeys = new Set();
-  task.items.forEach(i => { Object.keys(i.receivedStatus || {}).forEach(k => allKeys.add(k)); });
-  if (allKeys.size === 0) return;
-  const labels = [...allKeys];
-  const lastLabel = labels[labels.length - 1];
-  task.items.forEach(item => {
-    const s = item.receivedStatus || {};
-    delete s[lastLabel];
-    item.receivedStatus = s;
+  const labels = (task.receiveLabels && task.receiveLabels.length) ? task.receiveLabels : ['已收'];
+  const inputs = document.querySelectorAll('#multiInputList .multi-input');
+  inputs.forEach((inp, i) => {
+    inp.value = labels[i] || '';
   });
-  await putTask(task);
-  render();
+  document.getElementById('multiReceiveModal').classList.add('show');
+  inputs[0].focus();
 }
 
-async function toggleReceivedLabel(taskId, itemId, label) {
-  const task = tasks.find(t => t.id === taskId);
+async function applyMultiReceiveLabels() {
+  const task = tasks.find(t => t.id === currentTaskId);
   if (!task) return;
-  const item = task.items.find(i => i.id === itemId);
-  if (!item) return;
-  const s = item.receivedStatus || {};
-  s[label] = !s[label];
-  item.receivedStatus = s;
-  item.updatedAt = Date.now();
-  await putTask(task);
-  render();
-}
+  const inputs = document.querySelectorAll('#multiInputList .multi-input');
+  const oldLabels = task.receiveLabels || [];
+  const newLabels = [];
+  inputs.forEach(inp => {
+    const v = inp.value.trim();
+    if (v) newLabels.push(v);
+  });
+  if (newLabels.length === 0) {
+    showNotify('请至少输入一个词语');
+    return;
+  }
+  const finalLabels = newLabels.slice(0, 5);
 
-async function perItemRemoveReceivedLabel(taskId, itemId, label) {
-  const task = tasks.find(t => t.id === taskId);
-  if (!task) return;
-  const item = task.items.find(i => i.id === itemId);
-  if (!item) return;
-  const s = item.receivedStatus || {};
-  delete s[label];
-  item.receivedStatus = s;
-  item.updatedAt = Date.now();
+  // 继承激活状态：
+  // 1) 同位置的旧标签状态 → 新标签
+  // 2) 如果第一个旧标签是"已收"且被激活，新第一标签也激活
+  // 3) 如果旧第一标签被修改（不再是"已收"），新第一标签继承"收单个"按钮的状态
+  const firstLabelChanged = oldLabels[0] !== finalLabels[0];
+  for (const item of task.items) {
+    const ms = item.multiStatus || {};
+    const newMs = {};
+    finalLabels.forEach((nl, idx) => {
+      const ol = oldLabels[idx];
+      if (ol !== undefined && ms[ol]) {
+        newMs[nl] = true;
+      } else if (idx === 0 && firstLabelChanged && item.status === '已收') {
+        // 第一个标签被修改且收单个已激活，则新第一标签激活
+        newMs[nl] = true;
+      } else {
+        newMs[nl] = !!ms[nl];
+      }
+    });
+    item.multiStatus = newMs;
+    item.updatedAt = Date.now();
+  }
+  task.receiveLabels = finalLabels;
   await putTask(task);
+  document.getElementById('multiReceiveModal').classList.remove('show');
   render();
 }
 
@@ -775,11 +806,9 @@ async function doBulkExempt(group) {
       if (allExempt) {
         i.status = '';
         i.updatedAt = null;
-        i.receivedStatus = {};
       } else {
         i.status = '不需要';
         i.updatedAt = now;
-        i.receivedStatus = {};
       }
     }
   });
@@ -876,6 +905,27 @@ document.getElementById('newTaskName').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('btnConfirmNew').click();
 });
 
+// multi receive header buttons
+document.addEventListener('click', (e) => {
+  const cfg = e.target.closest('[data-action="open-multi-config"]');
+  if (cfg) { openMultiReceiveModal(); return; }
+  const rst = e.target.closest('[data-action="reset-to-single"]');
+  if (rst) { resetToSingle(); }
+});
+
+// multi receive modal
+document.getElementById('btnCancelMulti').addEventListener('click', () => {
+  document.getElementById('multiReceiveModal').classList.remove('show');
+});
+document.getElementById('btnConfirmMulti').addEventListener('click', () => {
+  applyMultiReceiveLabels();
+});
+document.querySelectorAll('#multiInputList .multi-input').forEach(inp => {
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); applyMultiReceiveLabels(); }
+  });
+});
+
 document.getElementById('confirmCancel').addEventListener('click', () => {
   document.getElementById('confirmDialog').classList.remove('show');
   confirmCallback = null;
@@ -938,17 +988,11 @@ async function init() {
   const oldStatusMap = { '已反馈问题': '已反馈', '未缴': '未交', '不需要缴': '不需要' };
   let changed = false;
   for (const t of tasks) {
+    if (t.receiveMode) { delete t.receiveMode; changed = true; }
+    if (!Array.isArray(t.receiveLabels)) { t.receiveLabels = []; changed = true; }
     for (const i of t.items) {
       if (oldStatusMap[i.status]) { i.status = oldStatusMap[i.status]; changed = true; }
-      if (!i.receivedStatus && i.receivedLabels) {
-        const s = {};
-        i.receivedLabels.forEach(l => { s[l] = true; });
-        i.receivedStatus = s;
-        delete i.receivedLabels;
-        changed = true;
-      }
-      if (!i.receivedStatus) { i.receivedStatus = {}; changed = true; }
-      if (i.receivedLabels) { delete i.receivedLabels; changed = true; }
+      if (!i.multiStatus) { i.multiStatus = {}; changed = true; }
     }
   }
   if (changed) { for (const t of tasks) await putTask(t); }
