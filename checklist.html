@@ -63,11 +63,12 @@ header h1 { font-size: 20px; color: var(--primary); margin-bottom: 12px; }
 .checklist-table th { background: #f8f9fa; padding: 8px 6px; text-align: left; font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid var(--border); white-space: nowrap; }
 .checklist-table td { padding: 6px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
 .checklist-table tr:hover td { background: inherit; }
-tr.row-s-received:hover td { background: rgba(39, 174, 96, 0.15); }
-tr.row-s-issue:hover td { background: rgba(230, 126, 34, 0.15); }
-tr.row-s-unpaid:hover td { background: rgba(231, 76, 60, 0.15); }
-tr.row-s-exempt:hover td { background: rgba(52, 152, 219, 0.15); }
-tr:not([class*="row-s-"]):hover td { background: #f0f1f3; }
+tr.row-has-received:hover td { background: rgba(39,174,96,0.14); }
+tr.row-full-received:hover td { background: rgba(39,174,96,0.16); }
+tr.row-s-issue:hover td { background: rgba(230,126,34,0.15); }
+tr.row-s-unpaid:hover td { background: rgba(231,76,60,0.15); }
+tr.row-s-exempt:hover td { background: rgba(52,152,219,0.15); }
+tr:not([class*="row-"]):hover td { background: #f0f1f3; }
 .col-idx { width: 36px; text-align: center; color: var(--text-secondary); }
 .col-name { min-width: 140px; }
 .col-status { white-space: nowrap; }
@@ -77,7 +78,7 @@ tr:not([class*="row-s-"]):hover td { background: #f0f1f3; }
 .note-display:hover { background: #f0f2f5; }
 .note-input { width: 130px; font-size: 12px; padding: 1px 4px; border: 1px solid var(--primary); border-radius: 3px; outline: none; }
 
-.status-btn { display: inline-block; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; color: var(--text-secondary); transition: all 0.15s; text-align: center; min-width: 72px; }
+.status-btn { display: inline-flex; align-items: center; padding: 2px 5px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; color: var(--text-secondary); transition: all 0.15s; text-align: center; }
 .status-btn:hover { border-color: #999; }
 .status-btn.active-s-received { background: var(--s-received); color: #fff; border-color: var(--s-received); }
 .status-btn.active-s-issue { background: var(--s-issue); color: #fff; border-color: var(--s-issue); }
@@ -85,15 +86,29 @@ tr:not([class*="row-s-"]):hover td { background: #f0f1f3; }
 .status-btn.active-s-exempt { background: var(--s-exempt); color: #fff; border-color: var(--s-exempt); }
 .status-btn + .status-btn { margin-left: 2px; }
 
-/* row status tint — matches button colors */
-tr.row-s-received { background: rgba(39, 174, 96, 0.08); }
-tr.row-s-received .col-name { background: rgba(39, 174, 96, 0.18); font-weight: 600; }
-tr.row-s-issue { background: rgba(230, 126, 34, 0.08); }
-tr.row-s-issue .col-name { background: rgba(230, 126, 34, 0.18); font-weight: 600; }
-tr.row-s-unpaid { background: rgba(231, 76, 60, 0.08); }
-tr.row-s-unpaid .col-name { background: rgba(231, 76, 60, 0.18); font-weight: 600; }
-tr.row-s-exempt { background: rgba(52, 152, 219, 0.08); }
-tr.row-s-exempt .col-name { background: rgba(52, 152, 219, 0.18); font-weight: 600; }
+/* received tags */
+.received-area { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; margin-right: 4px; }
+.received-tag { display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px; border-radius: 3px; font-size: 11px; background: rgba(39,174,96,0.12); border: 1px solid var(--s-received); color: #1a7a3a; cursor: default; }
+.received-tag .rm { cursor: pointer; font-size: 12px; line-height: 1; opacity: 0.5; margin-left: 1px; }
+.received-tag .rm:hover { opacity: 1; }
+.rec-input { width: 46px; font-size: 11px; padding: 1px 3px; border: 1px solid var(--s-received); border-radius: 3px; outline: none; }
+.rec-header-btn { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; line-height: 1; color: var(--text-secondary); margin-left: 2px; vertical-align: middle; }
+.rec-header-btn:hover { border-color: var(--s-received); color: var(--s-received); }
+.rec-header-input { width: 60px; font-size: 11px; padding: 1px 4px; border: 1px solid var(--s-received); border-radius: 3px; outline: none; vertical-align: middle; }
+.rm-label { cursor: pointer; opacity: 0.4; font-size: 11px; margin-left: 2px; line-height: 1; }
+.rm-label:hover { opacity: 1; }
+
+/* row status tints */
+tr.row-has-received { background: repeating-linear-gradient(-45deg, transparent, transparent 5px, rgba(39,174,96,0.06) 5px, rgba(39,174,96,0.06) 10px); }
+tr.row-has-received .col-name { background: rgba(39,174,96,0.18); font-weight: 600; }
+tr.row-full-received { background: rgba(39,174,96,0.08); }
+tr.row-full-received .col-name { background: rgba(39,174,96,0.2); font-weight: 600; }
+tr.row-s-issue { background: rgba(230,126,34,0.08); }
+tr.row-s-issue .col-name { background: rgba(230,126,34,0.18); font-weight: 600; }
+tr.row-s-unpaid { background: rgba(231,76,60,0.08); }
+tr.row-s-unpaid .col-name { background: rgba(231,76,60,0.18); font-weight: 600; }
+tr.row-s-exempt { background: rgba(52,152,219,0.08); }
+tr.row-s-exempt .col-name { background: rgba(52,152,219,0.18); font-weight: 600; }
 
 /* collapsed group */
 .group-section.collapsed .checklist-table { display: none; }
@@ -292,7 +307,8 @@ function makeDefaultItems() {
     group: i < GROUP_BREAK ? '直属单位' : '区市县',
     status: '',
     updatedAt: null,
-    note: ''
+    note: '',
+    receivedStatus: {}
   }));
 }
 
@@ -404,12 +420,12 @@ function renderChecklist() {
   groups.forEach(g => {
     const items = task.items.filter(i => i.group === g)
       .sort((a, b) => {
-        if (a.status === '不需要缴' && b.status !== '不需要缴') return 1;
-        if (a.status !== '不需要缴' && b.status === '不需要缴') return -1;
+        if (a.status === '不需要' && b.status !== '不需要') return 1;
+        if (a.status !== '不需要' && b.status === '不需要') return -1;
         return a.id - b.id;
       });
-    const allExempt = items.length > 0 && items.every(i => i.status === '不需要缴');
-    const btnText = allExempt ? '全部设为需要缴' : '全部设为不需要缴';
+    const allExempt = items.length > 0 && items.every(i => i.status === '不需要');
+    const btnText = allExempt ? '全部改为需要缴' : '全部设为不需要';
     html += `
       <div class="group-section${allExempt ? ' collapsed' : ''}">
         <div class="group-title">
@@ -421,7 +437,7 @@ function renderChecklist() {
           <thead><tr>
             <th class="col-idx">#</th>
             <th class="col-name">单位名称</th>
-            <th class="col-status" colspan="4">状态</th>
+            <th class="col-status">状态 <span class="rec-header-btn" data-action="add-rec-header" title="新增已收描述">+</span><span class="rec-header-btn" data-action="rm-rec-header" title="移除已收描述">-</span></th>
             <th class="col-time">更新时间</th>
             <th class="col-note">备注</th>
           </tr></thead>
@@ -443,11 +459,59 @@ function renderChecklist() {
   });
 
   // bind status buttons
-  container.querySelectorAll('.status-btn').forEach(btn => {
+  container.querySelectorAll('[data-action="set-status"]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const itemId = parseInt(btn.dataset.itemId);
+      const id = parseInt(btn.dataset.id);
       const status = btn.dataset.status;
-      setItemStatus(currentTaskId, itemId, status);
+      setItemStatus(currentTaskId, id, status);
+    });
+  });
+
+  // bind header add/remove received
+  container.querySelector('[data-action="add-rec-header"]')?.addEventListener('click', () => {
+    const th = document.querySelector('.col-status');
+    const existing = th.querySelector('.rec-header-input');
+    if (existing) return;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'rec-header-input';
+    input.placeholder = '描述';
+    th.appendChild(input);
+    input.focus();
+    let done = false;
+    const commit = () => {
+      if (done) return;
+      done = true;
+      if (input.value.trim()) addReceivedLabelToAll(input.value.trim());
+      else input.remove();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') commit();
+      if (e.key === 'Escape') { done = true; input.remove(); }
+    });
+    input.addEventListener('blur', commit);
+  });
+  container.querySelector('[data-action="rm-rec-header"]')?.addEventListener('click', () => {
+    removeLastReceivedLabelFromAll();
+  });
+
+  // bind remove received label per item
+  container.querySelectorAll('[data-action="rm-rec"]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = parseInt(el.dataset.id);
+      const label = el.dataset.label;
+      perItemRemoveReceivedLabel(currentTaskId, id, label);
+    });
+  });
+
+  // bind toggle received label per item
+  container.querySelectorAll('[data-action="toggle-rec"]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.rm-label')) return;
+      const id = parseInt(el.dataset.id);
+      const label = el.dataset.label;
+      toggleReceivedLabel(currentTaskId, id, label);
     });
   });
 
@@ -467,7 +531,7 @@ function renderChecklist() {
     const save = async () => {
       const td = input.parentElement;
       const display = td.querySelector('.note-display');
-      const itemId = parseInt(input.dataset.itemId);
+      const itemId = parseInt(input.dataset.id);
       const task = tasks.find(t => t.id === currentTaskId);
       const item = task?.items.find(i => i.id === itemId);
       if (!item) return;
@@ -546,27 +610,40 @@ function bindRename() {
 }
 
 function renderRow(item, task) {
-  const statuses = [
-    { key: '已收', cls: 's-received' },
-    { key: '已反馈问题', cls: 's-issue' },
-    { key: '未缴', cls: 's-unpaid' },
-    { key: '不需要缴', cls: 's-exempt' }
-  ];
-  const btns = statuses.map(s => `
-    <span class="status-btn${item.status === s.key ? ' active-' + s.cls : ''}"
-          data-item-id="${item.id}" data-status="${s.key}">${s.key}</span>
-  `).join('');
   const time = item.updatedAt ? fmtTime(item.updatedAt) : '';
-  const rowCls = item.status ? `row-${statuses.find(s => s.key === item.status)?.cls || ''}` : '';
-  const noteId = `note-${item.id}`;
+
+  const labels = item.receivedStatus || {};
+  const labelBtns = Object.keys(labels).map(k =>
+    `<span class="status-btn${labels[k] ? ' active-s-received' : ''}" data-action="toggle-rec" data-id="${item.id}" data-label="${escHtml(k)}">${escHtml(k)}<span class="rm-label" data-action="rm-rec" data-id="${item.id}" data-label="${escHtml(k)}">✕</span></span>`
+  ).join('');
+
+  const statusBtns = [
+    { key: '已收', cls: 's-received' },
+    { key: '已反馈', cls: 's-issue' },
+    { key: '未交', cls: 's-unpaid' },
+    { key: '不需要', cls: 's-exempt' }
+  ].map(s =>
+    `<span class="status-btn${item.status === s.key ? ' active-' + s.cls : ''}" data-action="set-status" data-id="${item.id}" data-status="${s.key}">${s.key}</span>`
+  ).join('');
+
+  const cnt = Object.keys(labels).filter(k => labels[k]).length;
+  let rowCls = '';
+  if (item.status === '已反馈') rowCls = 'row-s-issue';
+  else if (item.status === '未交') rowCls = 'row-s-unpaid';
+  else if (item.status === '不需要') rowCls = 'row-s-exempt';
+  else if (cnt > 0) rowCls = cnt < 5 ? 'row-has-received' : 'row-full-received';
+
   return `<tr class="${rowCls}">
     <td class="col-idx">${item.id + 1}</td>
     <td class="col-name">${escHtml(item.name)}</td>
-    <td class="col-status" colspan="4">${btns}</td>
+    <td class="col-status">
+      ${labelBtns ? `<span class="received-area">${labelBtns}</span>` : ''}
+      ${statusBtns}
+    </td>
     <td class="col-time">${time}</td>
     <td class="col-note">
-      <span class="note-display" title="${escHtml(item.note || '')}" data-item-id="${item.id}">${escHtml(item.note || '')}</span>
-      <input type="text" class="note-input hidden" data-item-id="${item.id}" value="${escHtml(item.note || '')}">
+      <span class="note-display" title="${escHtml(item.note || '')}" data-id="${item.id}">${escHtml(item.note || '')}</span>
+      <input type="text" class="note-input hidden" data-id="${item.id}" value="${escHtml(item.note || '')}">
     </td>
   </tr>`;
 }
@@ -626,21 +703,88 @@ async function setItemStatus(taskId, itemId, status) {
   render();
 }
 
+async function addReceivedLabelToAll(label) {
+  const task = tasks.find(t => t.id === currentTaskId);
+  if (!task) return;
+  const allKeys = new Set();
+  task.items.forEach(i => { Object.keys(i.receivedStatus || {}).forEach(k => allKeys.add(k)); });
+  if (allKeys.has(label)) return;
+  task.items.forEach(item => {
+    const s = item.receivedStatus || {};
+    if (Object.keys(s).length < 5) {
+      s[label] = false;
+      item.receivedStatus = s;
+      item.updatedAt = Date.now();
+    }
+  });
+  await putTask(task);
+  render();
+}
+
+async function removeLastReceivedLabelFromAll() {
+  const task = tasks.find(t => t.id === currentTaskId);
+  if (!task) return;
+  const allKeys = new Set();
+  task.items.forEach(i => { Object.keys(i.receivedStatus || {}).forEach(k => allKeys.add(k)); });
+  if (allKeys.size === 0) return;
+  const labels = [...allKeys];
+  const lastLabel = labels[labels.length - 1];
+  task.items.forEach(item => {
+    const s = item.receivedStatus || {};
+    delete s[lastLabel];
+    item.receivedStatus = s;
+  });
+  await putTask(task);
+  render();
+}
+
+async function toggleReceivedLabel(taskId, itemId, label) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const item = task.items.find(i => i.id === itemId);
+  if (!item) return;
+  const s = item.receivedStatus || {};
+  s[label] = !s[label];
+  item.receivedStatus = s;
+  item.updatedAt = Date.now();
+  await putTask(task);
+  render();
+}
+
+async function perItemRemoveReceivedLabel(taskId, itemId, label) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const item = task.items.find(i => i.id === itemId);
+  if (!item) return;
+  const s = item.receivedStatus || {};
+  delete s[label];
+  item.receivedStatus = s;
+  item.updatedAt = Date.now();
+  await putTask(task);
+  render();
+}
+
 async function doBulkExempt(group) {
   const task = tasks.find(t => t.id === currentTaskId);
   if (!task) return;
   const groupItems = task.items.filter(i => i.group === group);
-  const allExempt = groupItems.every(i => i.status === '不需要缴');
-  const newStatus = allExempt ? '' : '不需要缴';
+  const allExempt = groupItems.every(i => i.status === '不需要');
   const now = Date.now();
   task.items.forEach(i => {
     if (i.group === group) {
-      i.status = newStatus;
-      i.updatedAt = newStatus ? now : null;
+      if (allExempt) {
+        i.status = '';
+        i.updatedAt = null;
+        i.receivedStatus = {};
+      } else {
+        i.status = '不需要';
+        i.updatedAt = now;
+        i.receivedStatus = {};
+      }
     }
   });
   await putTask(task);
-  showNotify(allExempt ? `已取消全部${group}的「不需要缴」` : `已将全部${group}设为「不需要缴」`);
+  showNotify(allExempt ? `已取消全部${group}的「不需要」` : `已将全部${group}设为「不需要」`);
   render();
 }
 
@@ -790,6 +934,24 @@ document.getElementById('archiveToggle').addEventListener('click', () => {
 // ===== Init =====
 async function init() {
   tasks = await getAllTasks();
+  // migrate old data
+  const oldStatusMap = { '已反馈问题': '已反馈', '未缴': '未交', '不需要缴': '不需要' };
+  let changed = false;
+  for (const t of tasks) {
+    for (const i of t.items) {
+      if (oldStatusMap[i.status]) { i.status = oldStatusMap[i.status]; changed = true; }
+      if (!i.receivedStatus && i.receivedLabels) {
+        const s = {};
+        i.receivedLabels.forEach(l => { s[l] = true; });
+        i.receivedStatus = s;
+        delete i.receivedLabels;
+        changed = true;
+      }
+      if (!i.receivedStatus) { i.receivedStatus = {}; changed = true; }
+      if (i.receivedLabels) { delete i.receivedLabels; changed = true; }
+    }
+  }
+  if (changed) { for (const t of tasks) await putTask(t); }
   if (tasks.length === 0) {
     const defaultTask = createTask('默认任务');
     tasks.push(defaultTask);
