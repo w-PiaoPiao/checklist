@@ -351,6 +351,7 @@ function createTask(name) {
     createdAt: Date.now(),
     archived: false,
     receiveLabels: [],
+    receiveFirstLabel: '',
     items: makeDefaultItems()
   };
 }
@@ -733,8 +734,9 @@ async function openMultiReceiveModal() {
 async function resetToSingle() {
   const task = tasks.find(t => t.id === currentTaskId);
   if (!task) return;
-  const firstLabel = (task.receiveLabels && task.receiveLabels[0]) || '';
+  const firstLabel = task.receiveFirstLabel || (task.receiveLabels && task.receiveLabels[0]) || '';
   task.receiveLabels = [];
+  task.receiveFirstLabel = '';
   for (const item of task.items) {
     const ms = item.multiStatus || {};
     if (firstLabel && ms[firstLabel]) {
@@ -781,23 +783,20 @@ async function applyMultiReceiveLabels() {
   }
   const finalLabels = newLabels.slice(0, 5);
 
-  // 继承激活状态：
-  // 1) 同位置的旧标签状态 → 新标签
-  // 2) 如果第一个旧标签是"已收"且被激活，新第一标签也激活
-  // 3) 如果旧第一标签被修改（不再是"已收"），新第一标签继承"收单个"按钮的状态
+  // 继承激活状态（按标签名称保留，非按位置）：
+  // 1) 同名标签保留原状态
+  // 2) 首次从收单个切换到收多个时，第一个标签继承已收的激活状态
   const firstLabelChanged = oldLabels[0] !== finalLabels[0];
   for (const item of task.items) {
     const ms = item.multiStatus || {};
     const newMs = {};
     finalLabels.forEach((nl, idx) => {
-      const ol = oldLabels[idx];
-      if (ol !== undefined && ms[ol]) {
+      if (ms[nl]) {
         newMs[nl] = true;
       } else if (idx === 0 && firstLabelChanged && item.status === '已收') {
-        // 第一个标签被修改且收单个已激活，则新第一标签激活
         newMs[nl] = true;
       } else {
-        newMs[nl] = !!ms[nl];
+        newMs[nl] = false;
       }
     });
     item.multiStatus = newMs;
@@ -805,6 +804,12 @@ async function applyMultiReceiveLabels() {
     item.updatedAt = Date.now();
   }
   task.receiveLabels = finalLabels;
+  // 记录首个标签（用于 resetToSingle 判断是否恢复已收）
+  // 仅在第一个输入框有值时更新；清空第一个输入框时保留旧值
+  const firstInputValue = inputs[0].value.trim();
+  if (firstInputValue) {
+    task.receiveFirstLabel = firstInputValue;
+  }
   await putTask(task);
   document.getElementById('multiReceiveModal').classList.remove('show');
   render();
@@ -1005,6 +1010,7 @@ async function init() {
   for (const t of tasks) {
     if (t.receiveMode) { delete t.receiveMode; changed = true; }
     if (!Array.isArray(t.receiveLabels)) { t.receiveLabels = []; changed = true; }
+    if (!t.receiveFirstLabel) { t.receiveFirstLabel = (t.receiveLabels && t.receiveLabels[0]) || ''; changed = true; }
     for (const i of t.items) {
       if (oldStatusMap[i.status]) { i.status = oldStatusMap[i.status]; changed = true; }
       if (!i.multiStatus) { i.multiStatus = {}; changed = true; }
