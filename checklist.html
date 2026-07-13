@@ -733,12 +733,20 @@ async function openMultiReceiveModal() {
 async function resetToSingle() {
   const task = tasks.find(t => t.id === currentTaskId);
   if (!task) return;
+  const firstLabel = (task.receiveLabels && task.receiveLabels[0]) || '';
   task.receiveLabels = [];
   for (const item of task.items) {
-    item.multiStatus = {};
-    if (!item.status) {
+    const ms = item.multiStatus || {};
+    if (firstLabel && ms[firstLabel]) {
+      item.status = '已收';
+      item.updatedAt = Date.now();
+    } else if (item.status === '已收') {
+      item.status = '';
+      item.updatedAt = null;
+    } else if (!item.status) {
       item.updatedAt = Date.now();
     }
+    item.multiStatus = {};
   }
   await putTask(task);
   render();
@@ -793,6 +801,7 @@ async function applyMultiReceiveLabels() {
       }
     });
     item.multiStatus = newMs;
+    if (item.status === '已收') item.status = '';
     item.updatedAt = Date.now();
   }
   task.receiveLabels = finalLabels;
