@@ -88,6 +88,7 @@ tr.row-multi-full:hover td { background: rgba(39,174,96,0.2); }
 .checklist-table td { padding: 6px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
 .checklist-table tr:hover td { background: inherit; }
 
+tr.row-s-received:hover td { background: rgba(39,174,96,0.15); }
 tr.row-s-issue:hover td { background: rgba(230,126,34,0.15); }
 tr.row-s-unpaid:hover td { background: rgba(231,76,60,0.15); }
 tr.row-s-exempt:hover td { background: rgba(52,152,219,0.15); }
@@ -113,6 +114,8 @@ tr:not([class*="row-"]):hover td { background: #f0f1f3; }
 
 /* row status tints */
 
+tr.row-s-received { background: rgba(39,174,96,0.08); }
+tr.row-s-received .col-name { background: rgba(39,174,96,0.18); font-weight: 600; }
 tr.row-s-issue { background: rgba(230,126,34,0.08); }
 tr.row-s-issue .col-name { background: rgba(230,126,34,0.18); font-weight: 600; }
 tr.row-s-unpaid { background: rgba(231,76,60,0.08); }
@@ -603,13 +606,16 @@ function bindRename() {
 function renderRow(item, task) {
   const time = item.updatedAt ? fmtTime(item.updatedAt) : '';
 
-  // 已收按钮（收单个）
-  const singleBtn = `<span class="status-btn${item.status === '已收' ? ' active-s-received' : ''}" data-action="set-status" data-id="${item.id}" data-status="已收" title="已收">已收</span>`;
-
-  // 收多个标签按钮组
+  // 收多个标签按钮组（先声明，供已收按钮判断是否多标签模式）
   const labels = (task.receiveLabels && task.receiveLabels.length) ? task.receiveLabels : [];
   const ms = item.multiStatus || {};
   const activeCount = labels.filter(l => ms[l]).length;
+
+  // 已收按钮（收单个），多标签模式下隐藏
+  const singleBtn = labels.length === 0
+    ? `<span class="status-btn${item.status === '已收' ? ' active-s-received' : ''}" data-action="set-status" data-id="${item.id}" data-status="已收" title="已收">已收</span>`
+    : '';
+
   const multiBtns = labels.map(l =>
     `<span class="multi-label-btn${ms[l] ? ' active' : ''}" data-action="toggle-multi" data-id="${item.id}" data-label="${escHtml(l)}" title="${escHtml(l)}">${escHtml(l)}</span>`
   ).join('');
@@ -623,15 +629,15 @@ function renderRow(item, task) {
     `<span class="status-btn${item.status === s.key ? ' active-' + s.cls : ''}" data-action="set-status" data-id="${item.id}" data-status="${s.key}" title="${s.key}">${s.key}</span>`
   ).join('');
 
-  // 行底纹：基于"收多个"的激活状态
+  // 行底纹：先判断多标签模式，再判断单状态
   let rowCls = '';
-  if (item.status === '已反馈') rowCls = 'row-s-issue';
-  else if (item.status === '未交') rowCls = 'row-s-unpaid';
-  else if (item.status === '不需要') rowCls = 'row-s-exempt';
-  else if (labels.length > 0) {
+  if (labels.length > 0) {
     if (activeCount > 0 && activeCount < labels.length) rowCls = 'row-multi-partial';
     else if (activeCount === labels.length) rowCls = 'row-multi-full';
-  }
+  } else if (item.status === '已反馈') rowCls = 'row-s-issue';
+  else if (item.status === '已收') rowCls = 'row-s-received';
+  else if (item.status === '未交') rowCls = 'row-s-unpaid';
+  else if (item.status === '不需要') rowCls = 'row-s-exempt';
 
   return `<tr class="${rowCls}">
     <td class="col-idx">${item.id + 1}</td>
