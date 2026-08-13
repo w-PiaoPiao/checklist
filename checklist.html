@@ -71,6 +71,7 @@
 [data-theme="dark"] .modal { box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
 [data-theme="dark"] .notification { background: #444; }
 [data-theme="dark"] #taskCard { box-shadow: 2px 2px 12px rgba(0,0,0,0.4); }
+[data-theme="dark"] .preset-item:hover { background: #2a2a42; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 #app { max-width: 1200px; margin: 0 auto; padding: 16px; }
 
@@ -84,6 +85,19 @@ header h1 { font-size: 20px; color: var(--primary); margin-bottom: 12px; }
 #btnNewFreeTask { background: var(--s-exempt); }
 .toolbar-btn { padding:6px 12px; border-radius:4px; border:1px solid var(--border); background:var(--card); cursor:pointer; font-size:13px; }
 .toolbar-btn:hover { border-color: var(--primary); }
+
+/* preset wrap & dropdown */
+.preset-wrap { position: relative; display: inline-block; }
+#btnNewPreset { background: var(--s-issue); }
+.preset-dropdown { position: absolute; top: 110%; left: 0; z-index: 60; background: var(--card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); padding: 4px 0; min-width: 180px; max-width: 260px; font-size: 13px; display: none; }
+.preset-dropdown.show { display: block; }
+.preset-item { display: flex; align-items: center; gap: 10px; padding: 7px 12px; cursor: pointer; }
+.preset-item:hover { background: #f0f2f5; }
+.preset-item .preset-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preset-item .preset-del { cursor: pointer; opacity: 0.5; font-size: 15px; line-height: 1; padding: 0 2px; }
+.preset-item .preset-del:hover { opacity: 1; color: #e74c3c; }
+.preset-empty { padding: 8px 12px; color: var(--text-secondary); font-size: 12px; cursor: default; }
+.save-preset-btn:hover { color: var(--s-exempt); border-color: var(--s-exempt); }
 
 /* multi receive row tints */
 tr.row-multi-full { background: rgba(39,174,96,0.18); }
@@ -258,8 +272,12 @@ tr.row-s-exempt .col-name { background: rgba(52,152,219,0.18); font-weight: 600;
   <header>
     <h1>收文件 Checklist</h1>
     <div class="toolbar">
-      <button id="btnNewTask" class="new-task-btn">+ 新建任务</button>
+      <button id="btnNewTask" class="new-task-btn">+ 新建默认任务</button>
       <button id="btnNewFreeTask" class="new-task-btn">+ 新建自由任务</button>
+      <div class="preset-wrap">
+        <button id="btnNewPreset" class="new-task-btn">+ 新建预设任务</button>
+        <div id="presetDropdown" class="preset-dropdown"></div>
+      </div>
       <button id="btnExport" class="toolbar-btn">导出数据</button>
       <button id="btnImport" class="toolbar-btn">导入数据</button>
       <button id="btnThemeToggle" class="toolbar-btn">🌙 深色</button>
@@ -288,6 +306,30 @@ tr.row-s-exempt .col-name { background: rgba(52,152,219,0.18); font-weight: 600;
     <div class="modal-btns">
       <button id="btnCancelNew">取消</button>
       <button id="btnConfirmNew" class="btn-primary">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- save preset modal -->
+<div class="modal-overlay" id="savePresetModal">
+  <div class="modal">
+    <h3>保存为预设任务</h3>
+    <input type="text" id="savePresetName" placeholder="输入预设名称..." autofocus>
+    <div class="modal-btns">
+      <button id="btnCancelSavePreset">取消</button>
+      <button id="btnConfirmSavePreset" class="btn-primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- use preset modal -->
+<div class="modal-overlay" id="usePresetModal">
+  <div class="modal">
+    <h3>从预设创建任务</h3>
+    <input type="text" id="usePresetName" placeholder="输入新任务名称..." autofocus>
+    <div class="modal-btns">
+      <button id="btnCancelUsePreset">取消</button>
+      <button id="btnConfirmUsePreset" class="btn-primary">创建</button>
     </div>
   </div>
 </div>
@@ -532,6 +574,7 @@ function renderTaskHeader(task) {
       </div>
       <div class="task-actions">
         <button class="rename-btn" id="btnRenameTask">重命名</button>
+        ${task.type === 'free' ? '<button class="save-preset-btn" id="btnSavePreset">保存预设</button>' : ''}
         <button class="archive-btn" id="btnArchiveTask">归档</button>
         <button class="delete-btn" id="btnDeleteTask">删除任务</button>
       </div>
@@ -653,6 +696,7 @@ function bindCommonChecklistEvents() {
 
 function bindTaskActions() {
   // bind task actions
+  document.getElementById('btnSavePreset')?.addEventListener('click', () => openSavePresetModal());
   document.getElementById('btnArchiveTask')?.addEventListener('click', () => doArchiveTask());
   document.getElementById('btnDeleteTask')?.addEventListener('click', () => {
     const task = tasks.find(t => t.id === currentTaskId);
@@ -1109,6 +1153,151 @@ document.getElementById('btnConfirmNew').addEventListener('click', () => {
 });
 document.getElementById('newTaskName').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('btnConfirmNew').click();
+});
+
+// ===== Presets (saved free-task templates) =====
+const PRESET_KEY = 'presetTemplates';
+function getPresets() {
+  try { return JSON.parse(localStorage.getItem(PRESET_KEY)) || []; }
+  catch (e) { return []; }
+}
+function setPresets(list) {
+  localStorage.setItem(PRESET_KEY, JSON.stringify(list));
+}
+
+function openSavePresetModal() {
+  const task = tasks.find(t => t.id === currentTaskId);
+  if (!task) return;
+  document.getElementById('savePresetName').value = task.name;
+  document.getElementById('savePresetModal').classList.add('show');
+  document.getElementById('savePresetName').focus();
+  document.getElementById('savePresetName').select();
+}
+function closeSavePresetModal() {
+  document.getElementById('savePresetModal').classList.remove('show');
+}
+async function doSavePreset() {
+  const task = tasks.find(t => t.id === currentTaskId);
+  if (!task) { closeSavePresetModal(); return; }
+  const name = document.getElementById('savePresetName').value.trim() || task.name || '未命名预设';
+  const presets = getPresets();
+  let p = presets.find(x => x.id === task.id);
+  if (!p) { p = { id: task.id, name, items: [] }; presets.push(p); }
+  p.name = name;
+  p.items = task.items.map(i => ({ name: i.name, group: i.group || '自定义' }));
+  setPresets(presets);
+  closeSavePresetModal();
+  renderPresetDropdown();
+  showNotify('已保存预设「' + name + '」');
+}
+
+function togglePresetDropdown(show) {
+  const dd = document.getElementById('presetDropdown');
+  dd.classList.toggle('show', show);
+  if (show) renderPresetDropdown();
+}
+function renderPresetDropdown() {
+  const dd = document.getElementById('presetDropdown');
+  const presets = getPresets();
+  dd.innerHTML = '';
+  if (presets.length === 0) {
+    dd.innerHTML = '<div class="preset-empty">暂无预设任务</div>';
+    return;
+  }
+  presets.forEach(p => {
+    const item = document.createElement('div');
+    item.className = 'preset-item';
+    const name = document.createElement('span');
+    name.className = 'preset-name';
+    name.textContent = p.name;
+    name.title = p.name;
+    const del = document.createElement('span');
+    del.className = 'preset-del';
+    del.textContent = '×';
+    del.title = '删除预设';
+    item.appendChild(name);
+    item.appendChild(del);
+    item.addEventListener('click', () => {
+      togglePresetDropdown(false);
+      usePreset(p.id);
+    });
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deletePreset(p.id);
+    });
+    dd.appendChild(item);
+  });
+}
+
+let pendingPresetId = null;
+
+function openUsePresetModal(presetId) {
+  pendingPresetId = presetId;
+  document.getElementById('usePresetName').value = '';
+  document.getElementById('usePresetModal').classList.add('show');
+  document.getElementById('usePresetName').focus();
+}
+function closeUsePresetModal() {
+  document.getElementById('usePresetModal').classList.remove('show');
+  pendingPresetId = null;
+}
+
+function usePreset(presetId) {
+  const presets = getPresets();
+  const p = presets.find(x => x.id === presetId);
+  if (!p) return;
+  openUsePresetModal(presetId);
+}
+
+async function doUsePreset() {
+  const presets = getPresets();
+  const p = presets.find(x => x.id === pendingPresetId);
+  if (!p) { closeUsePresetModal(); return; }
+  const name = document.getElementById('usePresetName').value.trim() || p.name || '未命名任务';
+  const task = createTask(name, 'free');
+  (p.items || []).forEach(n => {
+    task.items.push(makeItem(task.itemIdCounter, n.name, n.group || '自定义'));
+    task.itemIdCounter++;
+  });
+  tasks.push(task);
+  await putTask(task);
+  currentTaskId = task.id;
+  closeUsePresetModal();
+  render();
+  showNotify('已创建任务「' + name + '」');
+}
+
+async function deletePreset(presetId) {
+  const presets = getPresets().filter(x => x.id !== presetId);
+  setPresets(presets);
+  renderPresetDropdown();
+  showNotify('预设已删除');
+}
+
+// preset button + dropdown
+document.getElementById('btnNewPreset').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const dd = document.getElementById('presetDropdown');
+  togglePresetDropdown(!dd.classList.contains('show'));
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.preset-wrap')) togglePresetDropdown(false);
+});
+
+// save preset modal
+document.getElementById('btnCancelSavePreset').addEventListener('click', closeSavePresetModal);
+document.getElementById('btnConfirmSavePreset').addEventListener('click', doSavePreset);
+document.getElementById('savePresetName').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') doSavePreset();
+  if (e.key === 'Escape') closeSavePresetModal();
+});
+
+// use preset modal
+document.getElementById('btnCancelUsePreset').addEventListener('click', closeUsePresetModal);
+document.getElementById('btnConfirmUsePreset').addEventListener('click', doUsePreset);
+document.getElementById('usePresetName').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') doUsePreset();
+  if (e.key === 'Escape') closeUsePresetModal();
 });
 
 // multi receive header buttons
