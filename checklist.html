@@ -64,6 +64,7 @@
 [data-theme="dark"] .archive-item:hover { background: #2a2a42; }
 [data-theme="dark"] .note-display:hover { background: #2a2a42; }
 [data-theme="dark"] .free-add-row { border-bottom-color: #3a3a52; }
+[data-theme="dark"] .free-add-hint { color: #ff7b7b; }
 [data-theme="dark"] #taskDropdown { box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
 [data-theme="dark"] #taskDropdown .td-item:hover { background: #2a2a42; }
 [data-theme="dark"] #taskDropdown .td-item.active { background: rgba(106,176,255,0.2); }
@@ -167,9 +168,9 @@ tr:not([class*="row-"]):hover td { background: #f0f1f3; }
 .col-status { white-space: nowrap; }
 .col-time { width: 105px; color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
 .col-note { width: 140px; max-width: 140px; font-size: 12px; }
-.note-display { cursor: default; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; display: inline-block; vertical-align: middle; padding: 1px 4px; border-radius: 3px; min-height: 20px; line-height: 20px; }
+.note-display { cursor: text; display: block; width: 100%; box-sizing: border-box; user-select: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 4px; border-radius: 3px; min-height: 20px; line-height: 20px; }
 .note-display:hover { background: #f0f2f5; }
-.note-input { width: 130px; font-size: 12px; padding: 1px 4px; border: 1px solid var(--primary); border-radius: 3px; outline: none; }
+.note-input { width: 100%; box-sizing: border-box; font-size: 12px; padding: 1px 4px; border: 1px solid var(--primary); border-radius: 3px; outline: none; }
 
 /* free task */
 .free-add-row { display: flex; gap: 8px; padding: 12px 20px; border-bottom: 1px solid #f0f0f0; }
@@ -177,6 +178,8 @@ tr:not([class*="row-"]):hover td { background: #f0f1f3; }
 .free-add-row input:focus { outline: none; border-color: var(--s-exempt); }
 .free-add-row button { padding: 6px 16px; border-radius: 4px; border: none; background: var(--s-exempt); color: #fff; cursor: pointer; font-size: 13px; }
 .free-add-row button:hover { opacity: 0.9; }
+.free-add-hint { display: none; padding: 0 20px 10px; color: #e74c3c; font-size: 12px; }
+.free-add-hint.show { display: block; }
 .col-del { width: 32px; text-align: center; }
 .unit-del-btn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border); background: var(--card); color: var(--text-secondary); cursor: pointer; font-size: 14px; line-height: 1; }
 .unit-del-btn:hover { border-color: #e74c3c; color: #e74c3c; }
@@ -653,13 +656,13 @@ function bindCommonChecklistEvents() {
     });
   });
 
-  // bind note dblclick
-  container.querySelectorAll('.note-display').forEach(el => {
-    el.addEventListener('dblclick', () => {
-      const td = el.parentElement;
+  // bind note dblclick — whole cell triggers editing
+  container.querySelectorAll('td.col-note').forEach(td => {
+    td.addEventListener('dblclick', (e) => {
       const input = td.querySelector('.note-input');
-      if (!input) return;
-      el.classList.add('hidden');
+      if (!input || e.target === input) return;
+      const display = td.querySelector('.note-display');
+      display.classList.add('hidden');
       input.classList.remove('hidden');
       input.focus();
       input.select();
@@ -717,6 +720,7 @@ function renderFreeChecklist(container, task) {
         <input type="text" id="freeUnitInput" placeholder="输入单位名称，回车或点击添加..." maxlength="50">
         <button id="btnAddUnit">添加单位</button>
       </div>
+      <div class="free-add-hint" id="freeAddHint"></div>
       <table class="checklist-table">
         <thead><tr>
           <th class="col-idx">#</th>
@@ -738,7 +742,7 @@ function renderFreeChecklist(container, task) {
   const btn = document.getElementById('btnAddUnit');
   const add = () => {
     const name = input.value.trim();
-    if (!name) { showNotify('请输入单位名称'); return; }
+    if (!name) { showFreeAddHint('请输入单位名称'); return; }
     doAddUnit(task, name);
   };
   btn.addEventListener('click', add);
@@ -1073,10 +1077,17 @@ async function doNewTask(name, type) {
 }
 
 async function doAddUnit(task, name) {
+  const lower = name.toLowerCase();
+  const dup = task.items.find(i => i.name.trim().toLowerCase() === lower);
+  if (dup) {
+    showFreeAddHint(`单位「${dup.name}」已存在，请勿重复添加`);
+    return;
+  }
   task.items.push(makeItem(task.itemIdCounter, name, '自定义'));
   task.itemIdCounter++;
   await putTask(task);
   render();
+  hideFreeAddHint();
   const input = document.getElementById('freeUnitInput');
   if (input) input.focus();
 }
@@ -1118,6 +1129,23 @@ function showNotify(msg) {
   el.classList.add('show');
   clearTimeout(el._timer);
   el._timer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function showFreeAddHint(msg) {
+  const el = document.getElementById('freeAddHint');
+  if (!el) { showNotify(msg); return; }
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => {
+    const cur = document.getElementById('freeAddHint');
+    if (cur) cur.classList.remove('show');
+  }, 3000);
+}
+
+function hideFreeAddHint() {
+  const el = document.getElementById('freeAddHint');
+  if (el) el.classList.remove('show');
 }
 
 function showConfirm(title, message, onConfirm) {
