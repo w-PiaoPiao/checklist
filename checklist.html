@@ -827,15 +827,15 @@ function renderRow(item, task, idx, deletable) {
     `<span class="status-btn${item.status === s.key ? ' active-' + s.cls : ''}" data-action="set-status" data-id="${item.id}" data-status="${s.key}" title="${s.key}">${s.key}</span>`
   ).join('');
 
-  // 行底纹：先判断多标签模式，再判断单状态
+  // 行底纹：已反馈/未交/不需要优先触发整行底色；未设置这些状态时再按多标签/已收判断
   let rowCls = '';
-  if (labels.length > 0) {
-    if (activeCount > 0 && activeCount < labels.length) rowCls = 'row-multi-partial';
-    else if (activeCount === labels.length) rowCls = 'row-multi-full';
-  } else if (item.status === '已反馈') rowCls = 'row-s-issue';
-  else if (item.status === '已收') rowCls = 'row-s-received';
+  if (item.status === '已反馈') rowCls = 'row-s-issue';
   else if (item.status === '未交') rowCls = 'row-s-unpaid';
   else if (item.status === '不需要') rowCls = 'row-s-exempt';
+  else if (labels.length > 0) {
+    if (activeCount > 0 && activeCount < labels.length) rowCls = 'row-multi-partial';
+    else if (activeCount === labels.length) rowCls = 'row-multi-full';
+  } else if (item.status === '已收') rowCls = 'row-s-received';
 
   return `<tr class="${rowCls}">
     <td class="col-idx">${rowIndex}</td>
