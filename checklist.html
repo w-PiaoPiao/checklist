@@ -169,6 +169,10 @@ tr.row-s-exempt:hover td { background: rgba(52,152,219,0.15); }
 tr:not([class*="row-"]):hover td { background: #f0f1f3; }
 .col-idx { width: 36px; text-align: center; color: var(--text-secondary); }
 .col-name { min-width: 140px; }
+/* 只允许拖选单位名称列，复制时不受序号/状态等干扰 */
+.checklist-table th, .checklist-table td { -webkit-user-select: none; user-select: none; }
+.checklist-table td.col-name { -webkit-user-select: text; user-select: text; }
+.checklist-table input { -webkit-user-select: text; user-select: text; }
 .col-status { white-space: nowrap; }
 .col-time { width: 105px; color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
 .col-note { width: 140px; max-width: 140px; font-size: 12px; }
@@ -848,6 +852,28 @@ checklistEl.addEventListener('input', (e) => {
       try { inp.setSelectionRange(pos, pos); } catch (err) {}
     }
   }
+});
+
+// 复制单位名称：拖选名称列后复制，粘贴到 Excel/WPS 时每个单位占一行一个单元格
+document.addEventListener('copy', (e) => {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  if (!e.clipboardData) return;
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
+  const range = sel.getRangeAt(0);
+  const names = [...document.querySelectorAll('#checklistContainer td.col-name')]
+    .filter(td => range.intersectsNode(td))
+    .map(td => td.textContent.trim())
+    .filter(Boolean);
+  if (names.length === 0) return;
+  e.clipboardData.setData('text/plain', names.join('\n'));
+  e.clipboardData.setData('text/html',
+    '<table><tbody>'
+    + names.map(n => `<tr><td>${escHtml(n)}</td></tr>`).join('')
+    + '</tbody></table>');
+  e.preventDefault();
+  showNotify(`已复制 ${names.length} 个单位名称`);
 });
 
 // task tabs / archive 用同样的一次性委托
