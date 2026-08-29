@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>收文件 Checklist</title>
+<script>
+// 提前设置主题，避免深色模式用户打开时闪白
+(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+</script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
@@ -264,6 +268,23 @@ tr.row-s-exempt .col-name { background: rgba(52,152,219,0.18); font-weight: 600;
 .notification { position: fixed; bottom: 20px; right: 20px; background: #333; color: #fff; padding: 10px 20px; border-radius: 6px; font-size: 13px; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
 .notification.show { opacity: 1; }
 
+/* table horizontal scroll on narrow screens */
+.table-wrap { overflow-x: auto; }
+button { font-family: inherit; }
+
+/* task stats */
+.task-stats { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+.task-stats b { font-weight: 600; }
+.task-stats .stat-received b { color: var(--s-received); }
+.task-stats .stat-partial b { color: var(--s-received); }
+.task-stats .stat-issue b { color: var(--s-issue); }
+.task-stats .stat-unpaid b { color: var(--s-unpaid); }
+.task-stats .stat-exempt b { color: var(--s-exempt); }
+
+/* unit filter */
+.unit-filter { margin-top: 10px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; width: 220px; background: var(--card); color: var(--text); }
+.unit-filter:focus { outline: none; border-color: var(--primary); }
+
 /* misc */
 .hidden { display: none !important; }
 </style>
@@ -356,6 +377,19 @@ tr.row-s-exempt .col-name { background: rgba(52,152,219,0.18); font-weight: 600;
   </div>
 </div>
 
+<!-- import mode modal -->
+<div class="modal-overlay" id="importModeModal">
+  <div class="modal">
+    <h3>导入数据</h3>
+    <p id="importModeDesc" style="margin-bottom:20px;font-size:13px;line-height:1.6;"></p>
+    <div class="modal-btns">
+      <button id="btnCancelImport">取消</button>
+      <button id="btnImportMerge" class="btn-primary">合并导入</button>
+      <button id="btnImportRestore" class="btn-danger">覆盖恢复</button>
+    </div>
+  </div>
+</div>
+
 <!-- confirm dialog -->
 <div class="modal-overlay" id="confirmDialog">
   <div class="modal">
@@ -393,18 +427,23 @@ const DB_NAME = 'DocChecklistDB';
 const DB_VERSION = 1;
 const STORE = 'tasks';
 
+let dbPromise = null;
 function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: 'id' });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  if (!dbPromise) {
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(STORE)) {
+          db.createObjectStore(STORE, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    dbPromise.catch(() => { dbPromise = null; });
+  }
+  return dbPromise;
 }
 
 async function getAllTasks() {
@@ -419,28 +458,75 @@ async function getAllTasks() {
 
 async function putTask(task) {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     const req = tx.objectStore(STORE).put(task);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
+  notifyOtherTabs();
 }
 
 async function deleteTaskFromDB(id) {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     const req = tx.objectStore(STORE).delete(id);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
+  notifyOtherTabs();
+}
+
+async function clearAllTasks() {
+  const db = await openDB();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const req = tx.objectStore(STORE).clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+  notifyOtherTabs();
+}
+
+// ===== Cross-tab sync =====
+// 多窗口/标签页同时打开时，通过 BroadcastChannel 互相通知数据变化，避免整条任务被旧数据覆盖
+const syncChannel = ('BroadcastChannel' in window) ? new BroadcastChannel('doc-checklist-sync') : null;
+function notifyOtherTabs() {
+  if (syncChannel) syncChannel.postMessage('changed');
+}
+if (syncChannel) {
+  syncChannel.onmessage = async () => {
+    try {
+      const fresh = await getAllTasks();
+      migrateTasks(fresh);
+      tasks = fresh;
+      if (!tasks.some(t => t.id === currentTaskId)) {
+        const firstActive = tasks.find(t => !t.archived);
+        currentTaskId = firstActive ? firstActive.id : null;
+        saveCurrentTaskId();
+      }
+      // 正在输入时不打断（暂不刷新，下次操作会呈现最新数据）
+      const ae = document.activeElement;
+      const typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
+      if (!typing) render();
+    } catch (e) { console.error(e); }
+  };
 }
 
 // ===== State =====
 let tasks = [];
 let currentTaskId = null;
 let confirmCallback = null;
+let filterText = '';
+const CURRENT_TASK_KEY = 'currentTaskId';
+
+function saveCurrentTaskId() {
+  try {
+    if (currentTaskId) localStorage.setItem(CURRENT_TASK_KEY, currentTaskId);
+    else localStorage.removeItem(CURRENT_TASK_KEY);
+  } catch (e) {}
+}
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
@@ -476,6 +562,7 @@ function createTask(name, type) {
 
 // ===== Render =====
 function render() {
+  saveCurrentTaskId();
   renderCard();
   renderTabs();
   renderChecklist();
@@ -532,20 +619,6 @@ function renderTabs() {
       <span class="del-btn" data-action="delete-task" data-id="${t.id}" title="删除任务">&times;</span>
     </div>
   `).join('');
-
-  container.querySelectorAll('.task-tab').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target.dataset.action === 'delete-task') return;
-      switchTask(el.dataset.id);
-    });
-  });
-  container.querySelectorAll('[data-action="delete-task"]').forEach(el => {
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const id = el.dataset.id;
-      showConfirm('删除任务', `确定要彻底删除任务「${tasks.find(t => t.id === id)?.name || ''}」吗？此操作不可恢复。`, () => doDeleteTask(id));
-    });
-  });
 }
 
 function renderChecklist() {
@@ -568,6 +641,45 @@ function sortItems(a, b) {
   return a.id - b.id;
 }
 
+function isItemReceived(item, labels) {
+  if (item.status === '已反馈' || item.status === '未交' || item.status === '不需要') return false;
+  if (labels.length) return labels.every(l => (item.multiStatus || {})[l]);
+  return item.status === '已收';
+}
+
+function computeStats(task) {
+  const labels = (task.receiveLabels && task.receiveLabels.length) ? task.receiveLabels : [];
+  const stats = { total: task.items.length, received: 0, partial: 0, issue: 0, unpaid: 0, exempt: 0, pending: 0 };
+  for (const item of task.items) {
+    if (item.status === '已反馈') stats.issue++;
+    else if (item.status === '未交') stats.unpaid++;
+    else if (item.status === '不需要') stats.exempt++;
+    else if (labels.length > 0) {
+      const activeCount = labels.filter(l => (item.multiStatus || {})[l]).length;
+      if (activeCount === labels.length) stats.received++;
+      else if (activeCount > 0) stats.partial++;
+      else stats.pending++;
+    } else if (item.status === '已收') stats.received++;
+    else stats.pending++;
+  }
+  return stats;
+}
+
+function renderStatsHtml(task) {
+  const s = computeStats(task);
+  if (s.total === 0) return '';
+  const parts = [`<span class="stat stat-received">已收 <b>${s.received}</b></span>`];
+  if (task.receiveLabels && task.receiveLabels.length) {
+    parts.push(`<span class="stat stat-partial">部分收 <b>${s.partial}</b></span>`);
+  }
+  parts.push(`<span class="stat stat-issue">已反馈 <b>${s.issue}</b></span>`);
+  parts.push(`<span class="stat stat-unpaid">未交 <b>${s.unpaid}</b></span>`);
+  parts.push(`<span class="stat stat-exempt">不需要 <b>${s.exempt}</b></span>`);
+  parts.push(`<span class="stat">未处理 <b>${s.pending}</b></span>`);
+  parts.push(`<span class="stat">共 <b>${s.total}</b></span>`);
+  return `<div class="task-stats">${parts.join('<span>·</span>')}</div>`;
+}
+
 function renderTaskHeader(task) {
   return `
     <div class="task-header">
@@ -581,137 +693,192 @@ function renderTaskHeader(task) {
         <button class="archive-btn" id="btnArchiveTask">归档</button>
         <button class="delete-btn" id="btnDeleteTask">删除任务</button>
       </div>
+      ${renderStatsHtml(task)}
+      <input type="text" id="unitFilter" class="unit-filter" placeholder="筛选单位名称..." value="${escHtml(filterText)}">
     </div>
   `;
 }
 
 function renderPresetChecklist(container, task) {
   const groups = ['直属单位', '区市县'];
+  const labels = (task.receiveLabels && task.receiveLabels.length) ? task.receiveLabels : [];
+  const kw = filterText.trim().toLowerCase();
   let html = renderTaskHeader(task);
   groups.forEach(g => {
-    const items = task.items.filter(i => i.group === g).sort(sortItems);
-    const allExempt = items.length > 0 && items.every(i => i.status === '不需要');
+    const groupItems = task.items.filter(i => i.group === g);
+    const items = groupItems.filter(i => !kw || i.name.toLowerCase().includes(kw)).sort(sortItems);
+    const allExempt = groupItems.length > 0 && groupItems.every(i => i.status === '不需要');
+    const recvCount = groupItems.filter(i => isItemReceived(i, labels)).length;
     const btnText = allExempt ? '全部改为需要缴' : '全部设为不需要';
+    const emptyRow = items.length === 0
+      ? `<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text-secondary);font-size:13px;">${kw ? '无匹配单位' : '暂无单位'}</td></tr>` : '';
     html += `
-      <div class="group-section${allExempt ? ' collapsed' : ''}">
+      <div class="group-section${allExempt && !kw ? ' collapsed' : ''}">
         <div class="group-title">
           <span>${g}</span>
-          <span class="count">${items.length} 个单位</span>
+          <span class="count">已收 ${recvCount}/${groupItems.length} · ${items.length} 个单位</span>
           <button class="bulk-btn${allExempt ? ' is-exempt' : ''}" data-group="${g}">${btnText}</button>
         </div>
+        <div class="table-wrap">
         <table class="checklist-table">
           <thead><tr>
             <th class="col-idx">#</th>
             <th class="col-name">单位名称</th>
-            <th class="col-status">状态 <span class="rec-header-btn" data-action="reset-to-single" title="恢复默认四个按钮">收单个</span><span class="rec-header-btn" data-action="open-multi-config" title="设置收多个标签">收多个</span></th>
+            <th class="col-status">状态 <button type="button" class="rec-header-btn" data-action="reset-to-single" title="恢复默认四个按钮">收单个</button><button type="button" class="rec-header-btn" data-action="open-multi-config" title="设置收多个标签">收多个</button></th>
             <th class="col-time">更新时间</th>
             <th class="col-note">备注</th>
           </tr></thead>
           <tbody>
-            ${items.map((item, idx) => renderRow(item, task, idx)).join('')}
+            ${items.map((item, idx) => renderRow(item, task, idx)).join('')}${emptyRow}
           </tbody>
         </table>
+        </div>
       </div>
     `;
   });
   container.innerHTML = html;
-
-  bindCommonChecklistEvents();
-  bindTaskActions();
 }
 
-function bindCommonChecklistEvents() {
-  const container = document.getElementById('checklistContainer');
-  // bind bulk buttons
-  container.querySelectorAll('.bulk-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const group = btn.dataset.group;
-      doBulkExempt(group);
-    });
-  });
+// ===== Delegated events（一次性绑定，渲染不再重复绑定）=====
+const checklistEl = document.getElementById('checklistContainer');
 
-  // bind status buttons
-  container.querySelectorAll('[data-action="set-status"]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = parseInt(btn.dataset.id);
-      const status = btn.dataset.status;
-      setItemStatus(currentTaskId, id, status);
-    });
-  });
-
-  // bind multi label buttons
-  container.querySelectorAll('[data-action="toggle-multi"]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = parseInt(btn.dataset.id);
-      const label = btn.dataset.label;
-      toggleMultiLabel(currentTaskId, id, label);
-    });
-  });
-
-  // bind delete unit buttons
-  container.querySelectorAll('[data-action="delete-unit"]').forEach(el => {
-    el.addEventListener('click', () => {
-      const id = parseInt(el.dataset.id);
-      doDeleteUnit(currentTaskId, id);
-    });
-  });
-
-  // bind note dblclick — whole cell triggers editing
-  container.querySelectorAll('td.col-note').forEach(td => {
-    td.addEventListener('dblclick', (e) => {
-      const input = td.querySelector('.note-input');
-      if (!input || e.target === input) return;
-      const display = td.querySelector('.note-display');
-      display.classList.add('hidden');
-      input.classList.remove('hidden');
-      input.focus();
-      input.select();
-    });
-  });
-  container.querySelectorAll('.note-input').forEach(input => {
-    const save = async () => {
-      const td = input.parentElement;
-      const display = td.querySelector('.note-display');
-      const itemId = parseInt(input.dataset.id);
-      const task = tasks.find(t => t.id === currentTaskId);
-      const item = task?.items.find(i => i.id === itemId);
-      if (!item) return;
-      item.note = input.value;
-      await putTask(task);
-      display.textContent = input.value || '';
-      display.title = input.value || '';
-      display.classList.remove('hidden');
-      input.classList.add('hidden');
-    };
-    input.addEventListener('blur', save);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { input.blur(); }
-      if (e.key === 'Escape') {
-        const td = input.parentElement;
-        const display = td.querySelector('.note-display');
-        input.value = display.title || '';
-        input.classList.add('hidden');
-        display.classList.remove('hidden');
-      }
-    });
-  });
+function startNoteEdit(td) {
+  const input = td.querySelector('.note-input');
+  const display = td.querySelector('.note-display');
+  if (!input || !display) return;
+  display.classList.add('hidden');
+  input.classList.remove('hidden');
+  input.focus();
+  input.select();
 }
 
-function bindTaskActions() {
-  // bind task actions
-  document.getElementById('btnSavePreset')?.addEventListener('click', () => openSavePresetModal());
-  document.getElementById('btnArchiveTask')?.addEventListener('click', () => doArchiveTask());
-  document.getElementById('btnDeleteTask')?.addEventListener('click', () => {
+async function saveNoteEdit(input) {
+  const td = input.parentElement;
+  const display = td.querySelector('.note-display');
+  if (!display) return;
+  const itemId = parseInt(input.dataset.id);
+  const task = tasks.find(t => t.id === currentTaskId);
+  const item = task?.items.find(i => i.id === itemId);
+  if (item && item.note !== input.value) {
+    item.note = input.value;
+    await putTask(task);
+  }
+  display.textContent = input.value || '';
+  display.title = input.value || '';
+  display.classList.remove('hidden');
+  input.classList.add('hidden');
+}
+
+function cancelNoteEdit(input) {
+  const td = input.parentElement;
+  const display = td.querySelector('.note-display');
+  if (!display) return;
+  input.value = display.title || '';
+  input.classList.add('hidden');
+  display.classList.remove('hidden');
+}
+
+function addFreeUnit() {
+  const input = document.getElementById('freeUnitInput');
+  const task = tasks.find(t => t.id === currentTaskId);
+  if (!input || !task) return;
+  const name = input.value.trim();
+  if (!name) { showFreeAddHint('请输入单位名称'); return; }
+  doAddUnit(task, name);
+}
+
+checklistEl.addEventListener('click', (e) => {
+  const statusBtn = e.target.closest('[data-action="set-status"]');
+  if (statusBtn) { setItemStatus(currentTaskId, parseInt(statusBtn.dataset.id), statusBtn.dataset.status); return; }
+  const multiBtn = e.target.closest('[data-action="toggle-multi"]');
+  if (multiBtn) { toggleMultiLabel(currentTaskId, parseInt(multiBtn.dataset.id), multiBtn.dataset.label); return; }
+  const delUnit = e.target.closest('[data-action="delete-unit"]');
+  if (delUnit) { doDeleteUnit(currentTaskId, parseInt(delUnit.dataset.id)); return; }
+  const bulk = e.target.closest('.bulk-btn');
+  if (bulk) { doBulkExempt(bulk.dataset.group); return; }
+  if (e.target.closest('#btnAddUnit')) { addFreeUnit(); return; }
+  if (e.target.closest('#btnSavePreset')) { openSavePresetModal(); return; }
+  if (e.target.closest('#btnArchiveTask')) { doArchiveTask(); return; }
+  if (e.target.closest('#btnDeleteTask')) {
     const task = tasks.find(t => t.id === currentTaskId);
     showConfirm('删除任务', `确定要彻底删除任务「${task?.name || ''}」吗？所有记录将不可恢复。`, () => doDeleteTask(currentTaskId));
-  });
-  bindRename();
-}
+    return;
+  }
+  if (e.target.closest('#btnRenameTask')) { handleRenameClick(); return; }
+});
+
+checklistEl.addEventListener('dblclick', (e) => {
+  if (e.target.classList.contains('note-input')) return;
+  const noteCell = e.target.closest('td.col-note');
+  if (noteCell) startNoteEdit(noteCell);
+});
+
+checklistEl.addEventListener('keydown', (e) => {
+  if (e.target.id === 'freeUnitInput' && e.key === 'Enter') { e.preventDefault(); addFreeUnit(); return; }
+  if (e.target.classList.contains('note-display') && e.key === 'Enter') {
+    e.preventDefault();
+    const noteCell = e.target.closest('td.col-note');
+    if (noteCell) startNoteEdit(noteCell);
+    return;
+  }
+  if (e.target.classList.contains('note-input')) {
+    if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+    else if (e.key === 'Escape') cancelNoteEdit(e.target);
+    return;
+  }
+  if (e.target.id === 'taskNameInput') {
+    if (e.key === 'Enter') finishRename();
+    else if (e.key === 'Escape') cancelRename();
+  }
+});
+
+checklistEl.addEventListener('focusout', (e) => {
+  if (e.target.classList && e.target.classList.contains('note-input')) saveNoteEdit(e.target);
+  else if (e.target.id === 'taskNameInput') finishRename();
+});
+
+checklistEl.addEventListener('input', (e) => {
+  if (e.target.id === 'unitFilter') {
+    filterText = e.target.value;
+    const pos = e.target.selectionStart;
+    renderChecklist();
+    const inp = document.getElementById('unitFilter');
+    if (inp) {
+      inp.focus();
+      try { inp.setSelectionRange(pos, pos); } catch (err) {}
+    }
+  }
+});
+
+// task tabs / archive 用同样的一次性委托
+document.getElementById('taskTabs').addEventListener('click', (e) => {
+  const del = e.target.closest('[data-action="delete-task"]');
+  if (del) {
+    e.stopPropagation();
+    const id = del.dataset.id;
+    showConfirm('删除任务', `确定要彻底删除任务「${tasks.find(t => t.id === id)?.name || ''}」吗？此操作不可恢复。`, () => doDeleteTask(id));
+    return;
+  }
+  const tab = e.target.closest('.task-tab');
+  if (tab && tab.dataset.id) switchTask(tab.dataset.id);
+});
+
+document.getElementById('archiveBody').addEventListener('click', (e) => {
+  const un = e.target.closest('.unarchive-btn');
+  if (un) { doUnarchiveTask(un.dataset.id); return; }
+  const del = e.target.closest('.archive-item .delete-btn');
+  if (del) {
+    const id = del.dataset.id;
+    const t = tasks.find(x => x.id === id);
+    showConfirm('删除任务', `确定要彻底删除归档任务「${t?.name || ''}」吗？`, () => doDeleteTask(id));
+  }
+});
 
 function renderFreeChecklist(container, task) {
-  const items = [...task.items].sort(sortItems);
+  const kw = filterText.trim().toLowerCase();
+  const items = task.items.filter(i => !kw || i.name.toLowerCase().includes(kw)).sort(sortItems);
   const rows = items.length === 0
-    ? `<tr><td colspan="6" class="empty-state"><p>暂无单位，请在上方输入单位名称添加</p></td></tr>`
+    ? `<tr><td colspan="6" style="padding:14px;text-align:center;color:var(--text-secondary);font-size:13px;">${kw ? '无匹配单位' : '暂无单位，请在上方输入单位名称添加'}</td></tr>`
     : items.map((item, idx) => renderRow(item, task, idx, true)).join('');
   const html = `
     ${renderTaskHeader(task)}
@@ -721,11 +888,12 @@ function renderFreeChecklist(container, task) {
         <button id="btnAddUnit">添加单位</button>
       </div>
       <div class="free-add-hint" id="freeAddHint"></div>
+      <div class="table-wrap">
       <table class="checklist-table">
         <thead><tr>
           <th class="col-idx">#</th>
           <th class="col-name">单位名称</th>
-          <th class="col-status">状态 <span class="rec-header-btn" data-action="reset-to-single" title="恢复默认四个按钮">收单个</span><span class="rec-header-btn" data-action="open-multi-config" title="设置收多个标签">收多个</span></th>
+          <th class="col-status">状态 <button type="button" class="rec-header-btn" data-action="reset-to-single" title="恢复默认四个按钮">收单个</button><button type="button" class="rec-header-btn" data-action="open-multi-config" title="设置收多个标签">收多个</button></th>
           <th class="col-time">更新时间</th>
           <th class="col-note">备注</th>
           <th class="col-del"></th>
@@ -734,70 +902,55 @@ function renderFreeChecklist(container, task) {
           ${rows}
         </tbody>
       </table>
+      </div>
     </div>
   `;
   container.innerHTML = html;
-
-  const input = document.getElementById('freeUnitInput');
-  const btn = document.getElementById('btnAddUnit');
-  const add = () => {
-    const name = input.value.trim();
-    if (!name) { showFreeAddHint('请输入单位名称'); return; }
-    doAddUnit(task, name);
-  };
-  btn.addEventListener('click', add);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); add(); }
-  });
-
-  bindCommonChecklistEvents();
-  bindTaskActions();
 }
 
-function bindRename() {
+function handleRenameClick() {
   const display = document.getElementById('taskNameDisplay');
   const input = document.getElementById('taskNameInput');
   const btn = document.getElementById('btnRenameTask');
   if (!display || !input || !btn) return;
+  if (!input.classList.contains('hidden')) { finishRename(); return; }
+  const task = tasks.find(t => t.id === currentTaskId);
+  display.classList.add('hidden');
+  input.classList.remove('hidden');
+  input.value = task ? task.name : '';
+  input.focus();
+  input.select();
+  btn.textContent = '保存';
+}
 
-  const startRename = () => {
-    const task = tasks.find(t => t.id === currentTaskId);
-    display.classList.add('hidden');
-    input.classList.remove('hidden');
-    input.value = task ? task.name : '';
-    input.focus();
-    input.select();
-    btn.textContent = '保存';
-  };
-
-  const finishRename = async () => {
-    const task = tasks.find(t => t.id === currentTaskId);
-    if (!task) return;
-    const newName = input.value.trim() || task.name;
+async function finishRename() {
+  const display = document.getElementById('taskNameDisplay');
+  const input = document.getElementById('taskNameInput');
+  const btn = document.getElementById('btnRenameTask');
+  if (!display || !input || input.classList.contains('hidden')) return;
+  const task = tasks.find(t => t.id === currentTaskId);
+  if (!task) return;
+  const newName = input.value.trim() || task.name;
+  if (newName !== task.name) {
     task.name = newName;
     await putTask(task);
-    display.textContent = taskLabel(task);
-    display.classList.remove('hidden');
-    input.classList.add('hidden');
-    btn.textContent = '重命名';
-    renderTabs();
-  };
+  }
+  display.textContent = (task.type === 'free' ? '🔓 ' : '') + task.name;
+  display.classList.remove('hidden');
+  input.classList.add('hidden');
+  btn.textContent = '重命名';
+  renderCard();
+  renderTabs();
+}
 
-  btn.addEventListener('click', () => {
-    if (btn.textContent === '保存') { finishRename(); return; }
-    startRename();
-  });
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') finishRename();
-    if (e.key === 'Escape') {
-      display.classList.remove('hidden');
-      input.classList.add('hidden');
-      btn.textContent = '重命名';
-    }
-  });
-  input.addEventListener('blur', () => {
-    if (!input.classList.contains('hidden')) finishRename();
-  });
+function cancelRename() {
+  const display = document.getElementById('taskNameDisplay');
+  const input = document.getElementById('taskNameInput');
+  const btn = document.getElementById('btnRenameTask');
+  if (!display || !input) return;
+  display.classList.remove('hidden');
+  input.classList.add('hidden');
+  if (btn) btn.textContent = '重命名';
 }
 
 function renderRow(item, task, idx, deletable) {
@@ -811,11 +964,11 @@ function renderRow(item, task, idx, deletable) {
 
   // 已收按钮（收单个），多标签模式下隐藏
   const singleBtn = labels.length === 0
-    ? `<span class="status-btn${item.status === '已收' ? ' active-s-received' : ''}" data-action="set-status" data-id="${item.id}" data-status="已收" title="已收">已收</span>`
+    ? `<button type="button" class="status-btn${item.status === '已收' ? ' active-s-received' : ''}" data-action="set-status" data-id="${item.id}" data-status="已收" title="已收">已收</button>`
     : '';
 
   const multiBtns = labels.map(l =>
-    `<span class="multi-label-btn${ms[l] ? ' active' : ''}" data-action="toggle-multi" data-id="${item.id}" data-label="${escHtml(l)}" title="${escHtml(l)}">${escHtml(l)}</span>`
+    `<button type="button" class="multi-label-btn${ms[l] ? ' active' : ''}" data-action="toggle-multi" data-id="${item.id}" data-label="${escHtml(l)}" title="${escHtml(l)}">${escHtml(l)}</button>`
   ).join('');
 
   // 其他状态按钮
@@ -824,7 +977,7 @@ function renderRow(item, task, idx, deletable) {
     { key: '未交', cls: 's-unpaid' },
     { key: '不需要', cls: 's-exempt' }
   ].map(s =>
-    `<span class="status-btn${item.status === s.key ? ' active-' + s.cls : ''}" data-action="set-status" data-id="${item.id}" data-status="${s.key}" title="${s.key}">${s.key}</span>`
+    `<button type="button" class="status-btn${item.status === s.key ? ' active-' + s.cls : ''}" data-action="set-status" data-id="${item.id}" data-status="${s.key}" title="${s.key}">${s.key}</button>`
   ).join('');
 
   // 行底纹：已反馈/未交/不需要优先触发整行底色；未设置这些状态时再按多标签/已收判断
@@ -845,10 +998,10 @@ function renderRow(item, task, idx, deletable) {
     </td>
     <td class="col-time">${time}</td>
     <td class="col-note">
-      <span class="note-display" title="${escHtml(item.note || '')}" data-id="${item.id}">${escHtml(item.note || '')}</span>
+      <span class="note-display" tabindex="0" title="${escHtml(item.note || '')}" data-id="${item.id}">${escHtml(item.note || '')}</span>
       <input type="text" class="note-input hidden" data-id="${item.id}" value="${escHtml(item.note || '')}">
     </td>
-    ${deletable ? `<td class="col-del"><span class="unit-del-btn" data-action="delete-unit" data-id="${item.id}" title="删除该单位">&times;</span></td>` : ''}
+    ${deletable ? `<td class="col-del"><button type="button" class="unit-del-btn" data-action="delete-unit" data-id="${item.id}" title="删除该单位">&times;</button></td>` : ''}
   </tr>`;
 }
 
@@ -872,22 +1025,12 @@ function renderArchive() {
       </div>
     </div>
   `).join('');
-
-  body.querySelectorAll('.unarchive-btn').forEach(btn => {
-    btn.addEventListener('click', () => doUnarchiveTask(btn.dataset.id));
-  });
-  body.querySelectorAll('.archive-item .delete-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.id;
-      const t = tasks.find(x => x.id === id);
-      showConfirm('删除任务', `确定要彻底删除归档任务「${t?.name || ''}」吗？`, () => doDeleteTask(id));
-    });
-  });
 }
 
 // ===== Actions =====
 async function switchTask(id) {
   currentTaskId = id;
+  filterText = '';
   render();
 }
 
@@ -937,13 +1080,15 @@ async function resetToSingle() {
   task.receiveFirstLabel = '';
   for (const item of task.items) {
     const ms = item.multiStatus || {};
+    const hadActive = Object.values(ms).some(Boolean);
     if (firstLabel && ms[firstLabel]) {
       item.status = '已收';
       item.updatedAt = Date.now();
     } else if (item.status === '已收') {
       item.status = '';
       item.updatedAt = null;
-    } else if (!item.status) {
+    } else if (!item.status && hadActive) {
+      // 仅在确有变化（多标签激活被清除）时刷新时间，避免给未操作过的单位刷时间戳
       item.updatedAt = Date.now();
     }
     item.multiStatus = {};
@@ -997,9 +1142,11 @@ async function applyMultiReceiveLabels() {
         newMs[nl] = false;
       }
     });
+    const changed = item.status === '已收' || finalLabels.some(nl => !!newMs[nl] !== !!ms[nl]);
     item.multiStatus = newMs;
     if (item.status === '已收') item.status = '';
-    item.updatedAt = Date.now();
+    // 仅在确有变化时刷新时间，避免全表时间戳被无意义刷新
+    if (changed) item.updatedAt = Date.now();
   }
   task.receiveLabels = finalLabels;
   // 记录首个标签（用于 resetToSingle 判断是否恢复已收）
@@ -1043,6 +1190,7 @@ async function doArchiveTask() {
   // switch to next available task
   const next = tasks.find(t => !t.archived && t.id !== currentTaskId);
   currentTaskId = next ? next.id : null;
+  filterText = '';
   render();
 }
 
@@ -1052,6 +1200,7 @@ async function doUnarchiveTask(id) {
   task.archived = false;
   await putTask(task);
   currentTaskId = id;
+  filterText = '';
   render();
 }
 
@@ -1064,6 +1213,7 @@ async function doDeleteTask(id) {
     const next = tasks.find(t => !t.archived);
     currentTaskId = next ? next.id : null;
   }
+  filterText = '';
   render();
   showNotify('任务已删除');
 }
@@ -1073,6 +1223,7 @@ async function doNewTask(name, type) {
   tasks.push(task);
   await putTask(task);
   currentTaskId = task.id;
+  filterText = '';
   render();
 }
 
@@ -1111,9 +1262,13 @@ function taskLabel(task) {
 }
 
 function escHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function fmtTime(ts) {
@@ -1290,6 +1445,7 @@ async function doUsePreset() {
   tasks.push(task);
   await putTask(task);
   currentTaskId = task.id;
+  filterText = '';
   closeUsePresetModal();
   render();
   showNotify('已创建任务「' + name + '」');
@@ -1360,45 +1516,128 @@ document.getElementById('confirmOk').addEventListener('click', () => {
 
 // import / export
 document.getElementById('btnExport').addEventListener('click', async () => {
-  const all = await getAllTasks();
-  const blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `收文件数据_${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-  showNotify('数据已导出');
+  try {
+    const all = await getAllTasks();
+    const data = {
+      schemaVersion: 2,
+      exportedAt: new Date().toISOString(),
+      presets: getPresets(),
+      tasks: all
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `收文件数据_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showNotify('数据已导出（含预设模板）');
+  } catch (err) {
+    showNotify('导出失败：' + err.message);
+  }
 });
 
 document.getElementById('btnImport').addEventListener('click', () => {
   document.getElementById('importFile').click();
 });
 
+// 解析并校验导入文件，兼容旧格式（纯任务数组）与新格式（含 schemaVersion/presets）
+function validateImportData(data) {
+  let importTasks, importPresets = null;
+  if (Array.isArray(data)) {
+    importTasks = data;
+  } else if (data && typeof data === 'object' && Array.isArray(data.tasks)) {
+    importTasks = data.tasks;
+    if (data.presets !== undefined && data.presets !== null) {
+      if (!Array.isArray(data.presets)) throw new Error('预设模板数据格式无效');
+      importPresets = data.presets;
+    }
+  } else {
+    throw new Error('格式无效');
+  }
+  importTasks.forEach((task, i) => {
+    if (!task || typeof task !== 'object') throw new Error(`第 ${i + 1} 个任务数据无效`);
+    if (!task.id || !task.name || !Array.isArray(task.items)) throw new Error(`任务「${task.name || task.id}」数据字段不完整`);
+    task.items.forEach((item, j) => {
+      if (!item || typeof item !== 'object' || typeof item.name !== 'string') {
+        throw new Error(`任务「${task.name}」第 ${j + 1} 个单位数据无效`);
+      }
+      if (typeof item.id !== 'number') item.id = j;
+    });
+    if (!task.type) task.type = 'preset';
+    if (!task.itemIdCounter && task.itemIdCounter !== 0) {
+      task.itemIdCounter = task.items.reduce((m, it) => Math.max(m, it.id), -1) + 1;
+    }
+  });
+  if (importPresets) {
+    importPresets.forEach((p, i) => {
+      if (!p || typeof p !== 'object' || !p.id || !Array.isArray(p.items)) {
+        throw new Error(`第 ${i + 1} 个预设模板数据无效`);
+      }
+    });
+  }
+  return { tasks: importTasks, presets: importPresets };
+}
+
+let pendingImport = null;
+
 document.getElementById('importFile').addEventListener('change', async (e) => {
   const file = e.target.files[0];
+  e.target.value = '';
   if (!file) return;
   try {
     const text = await file.text();
     const data = JSON.parse(text);
-    if (!Array.isArray(data)) throw new Error('格式无效');
-    for (const task of data) {
-      if (!task.id || !task.name || !Array.isArray(task.items)) throw new Error('数据字段不完整');
-      if (!task.type) task.type = 'preset';
-      if (!task.itemIdCounter && task.itemIdCounter !== 0) {
-        task.itemIdCounter = task.items.reduce((m, i) => Math.max(m, i.id), -1) + 1;
-      }
-      await putTask(task);
-    }
-    tasks = await getAllTasks();
-    const firstActive = tasks.find(t => !t.archived);
-    currentTaskId = firstActive ? firstActive.id : null;
-    render();
-    showNotify(`已导入 ${data.length} 个任务`);
+    pendingImport = validateImportData(data);
+    const presetCount = pendingImport.presets ? pendingImport.presets.length : 0;
+    document.getElementById('importModeDesc').textContent =
+      `文件包含 ${pendingImport.tasks.length} 个任务${presetCount ? `、${presetCount} 个预设模板` : ''}。` +
+      `合并导入：与现有数据按 id 覆盖合并，不删除现有任务；覆盖恢复：清空现有全部数据后完整恢复（不可撤销）。`;
+    document.getElementById('importModeModal').classList.add('show');
   } catch (err) {
     showNotify('导入失败：' + err.message);
   }
-  e.target.value = '';
 });
+
+async function doImport(restore) {
+  if (!pendingImport) return;
+  const { tasks: importTasks, presets: importPresets } = pendingImport;
+  document.getElementById('importModeModal').classList.remove('show');
+  try {
+    if (restore) {
+      await clearAllTasks();
+      if (importPresets) setPresets(importPresets);
+    } else if (importPresets) {
+      const cur = getPresets();
+      importPresets.forEach(p => {
+        const idx = cur.findIndex(x => x.id === p.id);
+        if (idx >= 0) cur[idx] = p; else cur.push(p);
+      });
+      setPresets(cur);
+    }
+    for (const t of importTasks) await putTask(t);
+    tasks = await getAllTasks();
+    if (migrateTasks(tasks)) {
+      for (const t of tasks) await putTask(t);
+    }
+    const firstActive = tasks.find(t => !t.archived);
+    currentTaskId = firstActive ? firstActive.id : null;
+    filterText = '';
+    render();
+    renderPresetDropdown();
+    showNotify(restore ? `已恢复 ${importTasks.length} 个任务` : `已合并导入 ${importTasks.length} 个任务`);
+  } catch (err) {
+    showNotify('导入失败：' + err.message);
+  } finally {
+    pendingImport = null;
+  }
+}
+
+document.getElementById('btnCancelImport').addEventListener('click', () => {
+  pendingImport = null;
+  document.getElementById('importModeModal').classList.remove('show');
+});
+document.getElementById('btnImportMerge').addEventListener('click', () => doImport(false));
+document.getElementById('btnImportRestore').addEventListener('click', () => doImport(true));
 
 // archive toggle
 document.getElementById('archiveToggle').addEventListener('click', () => {
@@ -1418,9 +1657,8 @@ function updateThemeButton(theme) {
   document.getElementById('btnThemeToggle').textContent = theme === 'dark' ? '☀️ 浅色' : '🌙 深色';
 }
 (function initTheme() {
-  const theme = getPreferredTheme();
-  document.documentElement.setAttribute('data-theme', theme);
-  updateThemeButton(theme);
+  // data-theme 已在 <head> 中提前设置（避免深色闪白），这里只同步按钮文案
+  updateThemeButton(document.documentElement.getAttribute('data-theme') || 'light');
 })();
 document.getElementById('btnThemeToggle').addEventListener('click', () => {
   const current = document.documentElement.getAttribute('data-theme') || 'light';
@@ -1430,13 +1668,29 @@ document.getElementById('btnThemeToggle').addEventListener('click', () => {
   updateThemeButton(next);
 });
 
+// 其他窗口修改了预设模板或主题时同步到本窗口
+window.addEventListener('storage', (e) => {
+  if (e.key === PRESET_KEY) renderPresetDropdown();
+  if (e.key === 'theme') {
+    const t = e.newValue || getPreferredTheme();
+    document.documentElement.setAttribute('data-theme', t);
+    updateThemeButton(t);
+  }
+});
+
+// 异步写入失败（如 IndexedDB 异常）统一提示，不再静默
+window.addEventListener('unhandledrejection', (e) => {
+  const reason = e.reason;
+  const msg = reason && reason.message ? reason.message : String(reason);
+  showNotify('操作失败：' + msg);
+});
+
 // ===== Init =====
-async function init() {
-  tasks = await getAllTasks();
-  // migrate old data
+// 旧格式数据迁移，返回是否有改动
+function migrateTasks(list) {
   const oldStatusMap = { '已反馈问题': '已反馈', '未缴': '未交', '不需要缴': '不需要' };
   let changed = false;
-  for (const t of tasks) {
+  for (const t of list) {
     if (t.receiveMode) { delete t.receiveMode; changed = true; }
     if (!t.type) { t.type = 'preset'; changed = true; }
     if (!Array.isArray(t.receiveLabels)) { t.receiveLabels = []; changed = true; }
@@ -1450,14 +1704,23 @@ async function init() {
       if (!i.multiStatus) { i.multiStatus = {}; changed = true; }
     }
   }
-  if (changed) { for (const t of tasks) await putTask(t); }
+  return changed;
+}
+
+async function init() {
+  tasks = await getAllTasks();
+  if (migrateTasks(tasks)) {
+    for (const t of tasks) await putTask(t);
+  }
   if (tasks.length === 0) {
     const defaultTask = createTask('默认任务');
     tasks.push(defaultTask);
     await putTask(defaultTask);
   }
   const firstActive = tasks.find(t => !t.archived);
-  currentTaskId = firstActive ? firstActive.id : null;
+  const savedId = localStorage.getItem(CURRENT_TASK_KEY);
+  const savedTask = savedId ? tasks.find(t => t.id === savedId && !t.archived) : null;
+  currentTaskId = savedTask ? savedTask.id : (firstActive ? firstActive.id : null);
   render();
 }
 init().catch(err => {
